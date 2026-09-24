@@ -1,0 +1,61 @@
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# --- uv / virtualenvs ----------------------------------------------------
+.venv/
+venv/
+env/
+
+# --- Tooling caches ------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.ipynb_checkpoints/
+
+# --- Secrets -------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- Model weights and ML artifacts -------------------------------------
+/models/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.ckpt
+*.gguf
+mlruns/
+mlartifacts/
+
+# --- Data (golden sets under data/synthetic/ are versioned, see T06) -----
+/data/*
+!/data/synthetic/
+
+# --- IDEs ----------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*:Zone.Identifier
