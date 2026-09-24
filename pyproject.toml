@@ -1,0 +1,106 @@
+[project]
+name = "convintel"
+version = "0.1.0"
+description = "Conversation Intelligence Engine: transcribe, redact and analyze voice and chat conversations."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0",
+    "pyright[nodejs]>=1.1.400",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+# Frozen, human-owned contracts use `Generic[T]`; don't force PEP 695 syntax on them.
+"src/convintel/contracts/**" = ["UP046"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+include = ["src", "tests", "scripts"]
+venvPath = "."
+venv = ".venv"
+
+# Strict for the contracts. Spelled out rule by rule because pyright's `strict = [...]` path
+# list cannot be combined with per-rule exceptions, and execution environments ignore
+# `typeCheckingMode`. Two rules stay off until the owner fixes known contract issues (T00 PR):
+# covariant T_co over the invariant OperatorResult, and untyped `default_factory=list`.
+[[tool.pyright.executionEnvironments]]
+root = "src/convintel/contracts"
+reportInvalidTypeVarUse = "none"
+reportUnknownVariableType = "none"
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+analyzeUnannotatedFunctions = true
+strictParameterNoneValue = true
+deprecateTypingAliases = false
+reportMissingTypeStubs = "error"
+reportConstantRedefinition = "error"
+reportDeprecated = "error"
+reportDuplicateImport = "error"
+reportIncompleteStub = "error"
+reportInconsistentConstructor = "error"
+reportInvalidStubStatement = "error"
+reportMatchNotExhaustive = "error"
+reportMissingParameterType = "error"
+reportMissingTypeArgument = "error"
+reportPrivateUsage = "error"
+reportTypeCommentUsage = "error"
+reportUnknownArgumentType = "error"
+reportUnknownLambdaType = "error"
+reportUnknownMemberType = "error"
+reportUnknownParameterType = "error"
+reportUnnecessaryCast = "error"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnusedClass = "error"
+reportUnusedImport = "error"
+reportUnusedFunction = "error"
+reportUnusedVariable = "error"
+reportUntypedBaseClass = "error"
+reportUntypedClassDecorator = "error"
+reportUntypedFunctionDecorator = "error"
+reportUntypedNamedTuple = "error"
+reportSelfClsParameterName = "error"
+reportUnusedExpression = "error"
+reportUnsupportedDunderAll = "error"
+reportInvalidStringEscapeSequence = "error"
+reportUnusedCoroutine = "error"
+reportOptionalMemberAccess = "error"
+
+[[tool.pyright.executionEnvironments]]
+root = "src"
+
+[[tool.pyright.executionEnvironments]]
+root = "."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-m 'not integration and not gpu'"
+markers = [
+    "integration: needs docker compose services or network access",
+    "gpu: needs a CUDA GPU and the 'ml' dependency group",
+]
