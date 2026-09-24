@@ -52,8 +52,6 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
 include = ["src", "tests", "scripts"]
-venvPath = "."
-venv = ".venv"
 
 # Strict for the contracts. Spelled out rule by rule because pyright's `strict = [...]` path
 # list cannot be combined with per-rule exceptions, and execution environments ignore
