@@ -38,12 +38,23 @@ docker compose -f infra/docker-compose.yml up -d
 uv run uvicorn convintel.api.main:app --reload
 ```
 
+### Local GPU (optional)
+
+PyTorch is not installed by default. For GPU work (fine-tuning, local models), install the `ml`
+group, which pulls CUDA 12.8 wheels (needed for Blackwell GPUs), and check the setup:
+
+```bash
+uv sync --group ml
+uv run python scripts/check_gpu.py   # GPU name, CUDA version, VRAM, matmul check + TFLOPS
+```
+
 ## Key decisions
 
 - [ADR-0001 Small model first, LLM as verifier](docs/adr/0001-small-model-first.md)
 - [ADR-0002 LangGraph for orchestration](docs/adr/0002-langgraph-orchestration.md)
 - [ADR-0003 Phoenix over OpenTelemetry](docs/adr/0003-tracing-phoenix-otel.md)
 - [ADR-0004 Versioned prompts](docs/adr/0004-prompt-versioning.md)
+- [ADR-0005 PyTorch as an opt-in CUDA 12.8 dependency group](docs/adr/0005-pytorch-cu128-dependency-group.md)
 
 ## How I built this
 
