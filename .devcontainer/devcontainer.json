@@ -1,0 +1,19 @@
+{
+  // Sandbox for coding agents (Pi runs with no permission prompts): only the repo is mounted
+  // and only env vars you pass explicitly are visible. No GPU, so the 'ml' group is skipped.
+  "name": "convintel",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
+  },
+  "containerEnv": {
+    "UV_LINK_MODE": "copy",
+    "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv-convintel"
+  },
+  "postCreateCommand": "pipx install uv && uv sync --no-group ml && uv run pre-commit install",
+  "customizations": {
+    "vscode": {
+      "extensions": ["charliermarsh.ruff", "ms-python.python", "ms-pyright.pyright"]
+    }
+  }
+}
