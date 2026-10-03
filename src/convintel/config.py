@@ -2,7 +2,9 @@
 
 Env var names carry no prefix so that standard names like `ANTHROPIC_API_KEY` work unchanged
 with provider SDKs and existing shells. Secrets have no defaults: a missing key surfaces as
-`None` at the call site instead of a silently wrong credential.
+`None` at the call site instead of a silently wrong credential. Empty values count as missing,
+so copying `.env.example` verbatim yields `None`, not `""`. Settings are frozen because the
+instance is cached process-wide and shared by every caller.
 """
 
 from functools import lru_cache
@@ -15,7 +17,13 @@ LLMProvider = Literal["anthropic", "ollama", "google", "openai"]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+        frozen=True,
+    )
 
     # LLM
     llm_provider: LLMProvider = "anthropic"
