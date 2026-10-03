@@ -10,6 +10,7 @@ Grafana (http://localhost:3000, "Pipeline overview") for the metrics. Ctrl+C to 
 All conversation content is synthetic; nothing here contains real PII.
 """
 
+import contextlib
 import random
 import time
 import uuid
@@ -62,7 +63,9 @@ def _emit_one(tracer: trace.Tracer) -> None:
                 outcome=random.choice(["agreed", "overrode"])
             ).inc()
 
-        _fake_operator("summary", fail=random.random() < 0.25)
+        # the synthetic failure is already on the span and in convintel_operator_errors_total
+        with contextlib.suppress(RuntimeError):
+            _fake_operator("summary", fail=random.random() < 0.25)
 
         with tracer.start_as_current_span("llm.call") as llm_span:
             llm_span.set_attribute("model.id", "demo-model")

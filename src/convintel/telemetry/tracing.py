@@ -49,9 +49,18 @@ def setup(
 
     # Imported here so `traced` (and tests) don't pay for wrapt/langchain patching.
     from openinference.instrumentation.langchain import LangChainInstrumentor
+    from openinference.semconv.resource import ResourceAttributes
 
     settings = settings or get_settings()
-    provider = TracerProvider(resource=Resource({"service.name": _SERVICE_NAME}))
+    provider = TracerProvider(
+        resource=Resource(
+            {
+                "service.name": _SERVICE_NAME,
+                # Phoenix groups spans into projects by this attribute.
+                ResourceAttributes.PROJECT_NAME: _SERVICE_NAME,
+            }
+        )
+    )
 
     if exporter is None:
         endpoint = f"{settings.phoenix_collector_endpoint.rstrip('/')}/v1/traces"
