@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instructions for every coding agent working in this repo (Claude Code, Pi, Codex, OpenCode…).
+Instructions for every coding agent working in this repo (Claude Code, Devin, Pi, Cursor…).
 This is the single source of truth. Do **not** create a `CLAUDE.md` — Claude Code reads this file
 when no `CLAUDE.md` exists.
 

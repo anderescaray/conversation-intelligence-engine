@@ -11,7 +11,7 @@
 | **Observability** | OpenTelemetry, Prometheus, Grafana | Metrics, traces, SLOs, dashboards, alerting |
 | **Cloud and delivery** | GCP Cloud Run / AWS, Terraform, GitHub Actions | IaC, CI/CD, canary releases, rollback |
 | **Engineering hygiene** | uv, ruff, pyright, pytest, pre-commit, ADRs | Professional repo standards, documented decisions |
-| **AI-assisted development** | Orca, Claude Code, Pi, Codex, AGENTS.md | Parallel agent workflows, task decomposition, reviewing AI code |
+| **AI-assisted development** | Claude Code, Devin, Pi, Cursor, git worktrees, AGENTS.md | Parallel agent workflows, task decomposition, reviewing AI code |
 
 ## About LangChain
 

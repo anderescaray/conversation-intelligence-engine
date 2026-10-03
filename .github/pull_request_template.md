@@ -1,5 +1,5 @@
 ## Task
-Closes #<issue> · Task file: `docs/tasks/Txx-*.md` · Agent: <Claude Code | Pi | Codex | human>
+Closes #<issue> · Task file: `docs/tasks/Txx-*.md` · Agent: <Claude Code | Devin | Pi | Cursor | human>
 
 ## Assumptions
 <!-- Anything ambiguous in the brief, and what you decided -->
