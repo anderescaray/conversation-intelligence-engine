@@ -1,6 +1,6 @@
 # T00 — Scaffold, tooling and CI
 
-**Lane:** — (pair with the human) · **Depends on:** nothing
+**Lane:** — (pair with the human) · **Depends on:** nothing · **Status:** ✅ done (PRs #1, #2)
 
 ## Goal
 A repo where every later task can start immediately: installable package, lint, types, tests, CI.

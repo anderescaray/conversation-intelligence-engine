@@ -1,20 +1,25 @@
-# Multi-agent workflow (Orca + Claude Code + Pi + Codex)
+# Multi-agent workflow (Claude Code + Devin + Pi + Cursor)
 
 ## Roles
 
 - **You (tech lead):** own the contracts, write task briefs, review every PR, merge, integrate.
-- **Agents (implementers):** one task per worktree, one PR per task, never merge.
-- **Orca:** runs the agents side by side, each in its own git worktree, tracked in one place.
+- **Agents (implementers):** one task per branch, one PR per task, never merge.
+  - **Claude Code** (Pro plan) and **Pi** run locally, each in its own git worktree.
+  - **Devin** runs in its own cloud environment and pushes its branch and PR itself.
+  - **Cursor** is for interactive review and small fixes you drive; it owns no lane.
 
-## One task = one worktree = one agent
+## One task = one branch = one agent
 
-1. Pick a task from `docs/tasks/` whose dependencies are merged.
-2. In Orca, create a worktree named after the branch: `lane-c/T03-intent-classifier`.
-3. Choose the agent (see `docs/PLAN.md` for suggestions) and send the kickoff prompt below.
-4. **Check that the agent actually started.** Orca can report success while the prompt sits
-   unsubmitted in a freshly launched TUI. Glance at each pane after launch.
-5. Let it work. Steer when it drifts out of scope (Orca's mobile app is handy here).
-6. The agent opens a PR. You review with the checklist below.
+1. Pick a task from `docs/tasks/` (and its GitHub issue) whose dependencies are merged.
+2. Create the branch named after the task: `lane-c/T03-intent-classifier`.
+   - **Local agents:** `git worktree add ../cie-T03 -b lane-c/T03-intent-classifier origin/main`
+     and start the agent inside that worktree.
+   - **Devin:** start a session on the repo and give it the branch name in the kickoff prompt.
+3. Choose the agent (see `docs/PLAN.md`) and send the kickoff prompt below.
+4. **Check that the agent actually started.** A freshly launched TUI can leave the prompt sitting
+   unsubmitted. Glance at each session after launch.
+5. Let it work. Steer when it drifts out of scope.
+6. The agent opens a PR that references the issue. You review with the checklist below.
 
 ### Kickoff prompt (same for every agent)
 
@@ -43,18 +48,34 @@ Merge the winner. Record the comparison in `docs/LOG.md`, because it makes good 
 
 ## Pi specifics
 
+- Uses the Anthropic API key. Give it only the keys it needs (never cloud admin credentials).
 - Pi reads `AGENTS.md` automatically and keeps plans in files (`PLAN.md` / `TODO.md`), not in a hidden mode.
-- **Pi runs with no permission prompts by default. Always run it inside the devcontainer or a
-  Docker container**, with only the API keys it needs (never cloud admin credentials).
+- **Pi runs with no permission prompts by default. Always run it inside the devcontainer.**
 - Pi is minimal (few tools, short system prompt). Give it precise task briefs, where it shines.
   Install and configure it following https://pi.dev.
 
 ## Claude Code specifics
 
+- Runs on the Pro plan: usage limits are shared across sessions, so two parallel lanes can hit
+  them. Stagger launches and prefer fewer, well-scoped sessions.
 - Reads `AGENTS.md` when there is no `CLAUDE.md` (v2.1.277+). Keep **only** `AGENTS.md`.
 - If AGENTS.md is not picked up (older version, Bedrock/Vertex, feature flags unavailable),
   check "Project instructions" in `/config`. As a last resort, create a one-line `CLAUDE.md`
   containing `@AGENTS.md`.
+
+## Devin specifics
+
+- Works in its own cloud machine, not in a local worktree: it clones the repo, creates the branch
+  and opens the PR itself.
+- Point it at `AGENTS.md` and the task brief in the kickoff prompt, and give it the exact branch name.
+- It cannot reach your local docker compose stack, so integration tests that need it are run by
+  you on the PR branch.
+- Review its PRs exactly like any other agent's.
+
+## Cursor specifics
+
+- Reads `AGENTS.md`. Use it to read, review and make small edits on a PR branch you have checked out.
+- It is not assigned a lane; if a fix grows beyond a few lines, hand it back to the lane's agent.
 
 ## Review checklist (you, on every PR)
 

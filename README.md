@@ -58,8 +58,8 @@ uv run python scripts/check_gpu.py   # GPU name, CUDA version, VRAM, matmul chec
 
 ## How I built this
 
-Built as tech lead of a team of coding agents (Claude Code, Pi, Codex) running in parallel git
-worktrees via Orca, with frozen contracts, per-task briefs and human review on every PR.
+Built as tech lead of a team of coding agents (Claude Code, Devin, Pi, Cursor) working in parallel on
+separate branches (local agents in their own git worktrees), with frozen contracts, per-task briefs and human review on every PR.
 See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) and the engineering log in [`docs/LOG.md`](docs/LOG.md).
 
 <!-- TODO: what worked, what didn't, agent bake-off results -->
