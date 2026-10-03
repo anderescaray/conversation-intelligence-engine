@@ -89,7 +89,7 @@ def _to_scores(labels: list[dict[str, Any]]) -> SentimentScores:
 
 
 def load_hf_model(model_id: str) -> HFSentimentModel:
-    """Download (first time) and load `model_id` on CPU."""
+    """Download (first time) and load `model_id` on the default device (GPU if torch sees one)."""
     from transformers import pipeline
 
     return HFSentimentModel(pipeline("text-classification", model=model_id), model_id)
