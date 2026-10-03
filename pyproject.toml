@@ -5,8 +5,15 @@ description = "Conversation Intelligence Engine: transcribe, redact and analyze 
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "langchain>=1.4.3",
+    "langchain-anthropic>=1.7.5",
+    "langchain-core>=1.6.6",
+    "langchain-ollama>=1.1.0",
+    "opentelemetry-api>=1.45.0",
+    "prometheus-client>=0.26.0",
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
+    "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]
@@ -16,6 +23,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 # Local GPU work only; never installed by default or in CI. See docs/adr/0005.
 ml = [
