@@ -1,9 +1,12 @@
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from convintel.config import Settings, get_settings
+
+_ENV_EXAMPLE = Path(__file__).resolve().parents[1] / ".env.example"
 
 _ENV_VARS = (
     "LLM_PROVIDER",
@@ -47,6 +50,32 @@ def test_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.llm_model == "llama3.1:8b"
     assert settings.google_api_key is not None
     assert settings.google_api_key.get_secret_value() == "test-key"
+
+
+def test_empty_values_count_as_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Copying .env.example verbatim leaves `KEY=` lines; they must not become "" credentials.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "")
+    monkeypatch.setenv("LLM_MODEL", "")
+    settings = _settings()
+    assert settings.anthropic_api_key is None
+    assert settings.twilio_account_sid is None
+    assert settings.llm_model == "claude-haiku-4-5"
+
+
+def test_settings_are_frozen() -> None:
+    settings = _settings()
+    with pytest.raises(ValidationError):
+        settings.llm_model = "other"
+
+
+def test_env_example_lists_every_setting() -> None:
+    keys = {
+        line.split("=", 1)[0].strip().lower()
+        for line in _ENV_EXAMPLE.read_text(encoding="utf-8").splitlines()
+        if "=" in line and not line.lstrip().startswith("#")
+    }
+    assert keys == set(Settings.model_fields)
 
 
 def test_secrets_are_masked_in_repr(monkeypatch: pytest.MonkeyPatch) -> None:

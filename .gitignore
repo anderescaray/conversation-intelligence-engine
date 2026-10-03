@@ -12,13 +12,12 @@ pip-wheel-metadata/
 # --- uv / virtualenvs ----------------------------------------------------
 .venv/
 venv/
-env/
+/env/
 
 # --- Tooling caches ------------------------------------------------------
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-.pyright/
 .coverage
 .coverage.*
 coverage.xml

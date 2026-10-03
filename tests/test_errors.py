@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 from convintel.errors import ConvIntelError, LLMError, OperatorError, TranscriptionError
@@ -12,3 +14,10 @@ def test_operator_error_keeps_operator_name() -> None:
     error = OperatorError("intent", "model not loaded")
     assert error.operator == "intent"
     assert str(error) == "[intent] model not loaded"
+
+
+def test_operator_error_survives_pickling() -> None:
+    restored = pickle.loads(pickle.dumps(OperatorError("intent", "model not loaded")))
+    assert isinstance(restored, OperatorError)
+    assert restored.operator == "intent"
+    assert str(restored) == "[intent] model not loaded"

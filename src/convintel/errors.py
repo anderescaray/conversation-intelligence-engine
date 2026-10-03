@@ -14,11 +14,17 @@ class OperatorError(ConvIntelError):
 
     Carries the operator name because it is the `operator` label of
     `convintel_operator_errors_total` and the pipeline must record it without parsing messages.
+    Both constructor arguments go to `args` so the error survives pickling (process pools,
+    task queues), which rebuilds exceptions as `cls(*args)`.
     """
 
     def __init__(self, operator: str, message: str) -> None:
-        super().__init__(f"[{operator}] {message}")
+        super().__init__(operator, message)
         self.operator = operator
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"[{self.operator}] {self.message}"
 
 
 class TranscriptionError(ConvIntelError):

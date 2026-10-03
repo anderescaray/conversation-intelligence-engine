@@ -36,7 +36,7 @@ def test_conversation_text_joins_turns_with_speakers() -> None:
 def test_conversation_is_immutable() -> None:
     conversation = _conversation()
     with pytest.raises(ValidationError):
-        conversation.id = "other"  # type: ignore[misc]
+        conversation.id = "other"
 
 
 def test_turn_rejects_negative_index() -> None:
