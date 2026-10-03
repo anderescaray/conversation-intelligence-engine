@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -105,10 +104,7 @@ class PIIOutput(BaseModel):
     redacted_conversation: Conversation
 
 
-T = TypeVar("T", bound=BaseModel)
-
-
-class OperatorResult(BaseModel, Generic[T]):
+class OperatorResult[T: BaseModel](BaseModel):
     """Envelope every operator returns. The metadata feeds telemetry and cost dashboards."""
 
     operator: str

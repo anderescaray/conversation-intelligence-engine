@@ -7,17 +7,15 @@ operators independently.
 
 from __future__ import annotations
 
-from typing import Protocol, TypeVar, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
 from .schemas import Conversation, OperatorResult
 
-T = TypeVar("T", bound=BaseModel)
-
 
 @runtime_checkable
-class Operator(Protocol[T]):
+class Operator[T: BaseModel](Protocol):
     name: str
     """Stable identifier, used in metrics labels and traces (e.g. 'intent')."""
 

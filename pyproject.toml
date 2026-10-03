@@ -44,10 +44,6 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC"]
 
-[tool.ruff.lint.per-file-ignores]
-# Frozen, human-owned contracts use `Generic[T]`; don't force PEP 695 syntax on them.
-"src/convintel/contracts/**" = ["UP046"]
-
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
