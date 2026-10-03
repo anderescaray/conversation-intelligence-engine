@@ -66,7 +66,7 @@ def test_empty_values_count_as_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_settings_are_frozen() -> None:
     settings = _settings()
     with pytest.raises(ValidationError):
-        settings.llm_model = "other"  # pyright: ignore[reportAttributeAccessIssue]
+        settings.llm_model = "other"
 
 
 def test_env_example_lists_every_setting() -> None:
