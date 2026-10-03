@@ -31,9 +31,12 @@ is kept, e.g. order numbers.
 
 ## Runtime
 
+- The spaCy model `en_core_web_lg` 3.8.0 is pinned in the `ml` dependency group (wheel URL
+  in `pyproject.toml`, must match the spaCy minor version): install it with
+  `uv sync --group ml`. The redactor never downloads anything; if the model is missing it raises
+  `OperatorError("pii", "... run `uv sync --group ml`")`.
 - The analyzer (spaCy pipeline) is a lazy, lock-protected per-process singleton
-  (`get_analyzer`). First use takes seconds; Presidio downloads the spaCy model if missing
-  (~400 MB, network). Pre-install it in images.
+  (`get_analyzer`). First use takes a few seconds.
 - Analysis runs in a worker thread (`asyncio.to_thread`).
 - Span `operator.pii` with `conversation.id`, `operator.version`, `model.id`, `pii.entity_count`.
   Never put text in span attributes or logs.
@@ -43,4 +46,5 @@ is kept, e.g. order numbers.
 
 - Unit (`tests/operators/pii/`): real Presidio with a blank spaCy pipeline; a deny-list of
   synthetic names stands in for NER. 24 labelled synthetic cases + hypothesis properties.
-- Integration (`-m integration`): real `en_core_web_lg`, prints recall per entity type.
+- Integration (`-m integration`): real `en_core_web_lg`, prints recall per entity type;
+  skipped when the `ml` group is not installed.

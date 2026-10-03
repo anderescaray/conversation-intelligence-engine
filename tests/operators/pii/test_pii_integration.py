@@ -1,4 +1,4 @@
-"""Real spaCy NER (downloads `en_core_web_lg` on first run): recall on the synthetic set."""
+"""Real spaCy NER (`en_core_web_lg`, `uv sync --group ml`): recall on the synthetic set."""
 
 from collections import Counter
 
@@ -13,6 +13,7 @@ MIN_RECALL = 0.9
 
 
 async def test_recall_with_real_ner(capsys: pytest.CaptureFixture[str]) -> None:
+    pytest.importorskip("en_core_web_lg")
     redactor = PIIRedactor()
     found: Counter[str] = Counter()
     total: Counter[str] = Counter()

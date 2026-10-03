@@ -3,6 +3,7 @@ from collections import Counter
 from typing import Any
 
 import pytest
+import spacy.cli
 from pii_synthetic_cases import CASES, PIICase, make_conversation, recalled
 from presidio_analyzer import AnalyzerEngine, RecognizerResult
 
@@ -109,6 +110,22 @@ async def test_unsupported_language_raises_operator_error(redactor: PIIRedactor)
         await redactor.run(conversation)
 
     assert excinfo.value.operator == "pii"
+
+
+async def test_missing_spacy_model_raises_instead_of_downloading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def no_download(*args: object, **kwargs: object) -> None:
+        raise AssertionError("PIIRedactor must never download a model")
+
+    monkeypatch.setattr(spacy.cli, "download", no_download)
+    redactor = PIIRedactor(spacy_model="en_core_web_not_installed")
+
+    with pytest.raises(OperatorError, match=r"uv sync --group ml") as excinfo:
+        await redactor.run(make_conversation("hello"))
+
+    assert excinfo.value.operator == "pii"
+    assert "en_core_web_not_installed" in excinfo.value.message
 
 
 async def test_analysis_runs_off_the_event_loop_thread(
