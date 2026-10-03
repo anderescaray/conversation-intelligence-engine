@@ -8,6 +8,7 @@ from convintel.telemetry.metrics import (
     PIPELINE_LATENCY_SECONDS,
     REQUESTS_TOTAL,
 )
+from convintel.telemetry.tracing import setup, traced
 
 __all__ = [
     "ASR_REALTIME_FACTOR",
@@ -16,4 +17,6 @@ __all__ = [
     "OPERATOR_LATENCY_SECONDS",
     "PIPELINE_LATENCY_SECONDS",
     "REQUESTS_TOTAL",
+    "setup",
+    "traced",
 ]
