@@ -10,16 +10,20 @@ repos:
         args: ["--maxkb=1024"]
       - id: detect-private-key
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.8
-    hooks:
-      - id: ruff-check
-        args: ["--fix"]
-      - id: ruff-format
-
-  # Runs from the project venv so it sees the same deps and config as CI.
+  # ruff and pyright run from the project venv, so they use the versions pinned in uv.lock
+  # and the same config as CI; no hook revs to keep in sync.
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
       - id: pyright
         name: pyright
         entry: uv run pyright
