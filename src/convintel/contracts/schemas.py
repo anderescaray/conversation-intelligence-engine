@@ -73,7 +73,7 @@ class Sentiment(StrEnum):
 class SentimentOutput(BaseModel):
     overall: Sentiment
     customer_trajectory: list[Sentiment] = Field(
-        default_factory=list, description="Customer sentiment per turn, in order"
+        default_factory=list[Sentiment], description="Customer sentiment per turn, in order"
     )
 
 
@@ -81,7 +81,7 @@ class IntentOutput(BaseModel):
     label: str
     confidence: float = Field(ge=0, le=1)
     source: str = Field(description="'classifier' or 'llm_verifier'")
-    top_k: list[tuple[str, float]] = Field(default_factory=list)
+    top_k: list[tuple[str, float]] = Field(default_factory=list[tuple[str, float]])
 
 
 class SummaryOutput(BaseModel):

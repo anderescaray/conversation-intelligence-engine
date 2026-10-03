@@ -52,61 +52,7 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
 include = ["src", "tests", "scripts"]
-
-# Strict for the contracts. Spelled out rule by rule because pyright's `strict = [...]` path
-# list cannot be combined with per-rule exceptions, and execution environments ignore
-# `typeCheckingMode`. Two rules stay off until the owner fixes known contract issues (T00 PR):
-# covariant T_co over the invariant OperatorResult, and untyped `default_factory=list`.
-[[tool.pyright.executionEnvironments]]
-root = "src/convintel/contracts"
-reportInvalidTypeVarUse = "none"
-reportUnknownVariableType = "none"
-strictListInference = true
-strictDictionaryInference = true
-strictSetInference = true
-analyzeUnannotatedFunctions = true
-strictParameterNoneValue = true
-deprecateTypingAliases = false
-reportMissingTypeStubs = "error"
-reportConstantRedefinition = "error"
-reportDeprecated = "error"
-reportDuplicateImport = "error"
-reportIncompleteStub = "error"
-reportInconsistentConstructor = "error"
-reportInvalidStubStatement = "error"
-reportMatchNotExhaustive = "error"
-reportMissingParameterType = "error"
-reportMissingTypeArgument = "error"
-reportPrivateUsage = "error"
-reportTypeCommentUsage = "error"
-reportUnknownArgumentType = "error"
-reportUnknownLambdaType = "error"
-reportUnknownMemberType = "error"
-reportUnknownParameterType = "error"
-reportUnnecessaryCast = "error"
-reportUnnecessaryComparison = "error"
-reportUnnecessaryContains = "error"
-reportUnnecessaryIsInstance = "error"
-reportUnusedClass = "error"
-reportUnusedImport = "error"
-reportUnusedFunction = "error"
-reportUnusedVariable = "error"
-reportUntypedBaseClass = "error"
-reportUntypedClassDecorator = "error"
-reportUntypedFunctionDecorator = "error"
-reportUntypedNamedTuple = "error"
-reportSelfClsParameterName = "error"
-reportUnusedExpression = "error"
-reportUnsupportedDunderAll = "error"
-reportInvalidStringEscapeSequence = "error"
-reportUnusedCoroutine = "error"
-reportOptionalMemberAccess = "error"
-
-[[tool.pyright.executionEnvironments]]
-root = "src"
-
-[[tool.pyright.executionEnvironments]]
-root = "."
+strict = ["src/convintel/contracts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
