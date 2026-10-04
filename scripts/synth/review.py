@@ -8,8 +8,9 @@ from typing import Literal
 from convintel.errors import ConvIntelError
 from convintel.telemetry import traced
 
+from .judge import reviewable
 from .scenarios import INTENTS
-from .schema import VERSION, Record, ReviewEvent, Sample
+from .schema import VERSION, Annotation, Record, ReviewEvent, Sample
 from .storage import (
     append_jsonl,
     digest,
@@ -50,9 +51,19 @@ def show_sample(sample: Sample) -> str:
         f"CANDIDATE {scenario.id} | sha256={digest(sample)}",
         f"intent={scenario.intent} channel={scenario.channel} resolved={scenario.resolved}",
         f"escalation_requested={scenario.escalation_requested}",
-        "customer_trajectory=" + ", ".join(scenario.customer_trajectory),
         f"PII scan={sample.labels.provenance.pii_scan}; manual PII and semantic review required",
     ]
+    if isinstance(sample.labels, Annotation):
+        target = sample.labels.scenario
+        lines.append(f"customer_sentiment={target.start_sentiment} -> {target.end_sentiment}")
+        lines.append(f"intent_description={target.intent_description}")
+        if sample.labels.judge is not None:
+            judge = sample.labels.judge
+            lines.append(
+                f"Judge {judge.model_id}, {judge.prompt_version}: {judge.verdict.model_dump_json()}"
+            )
+    else:
+        lines.append("ARCHIVED: no judge verdict; not eligible for human review or golden")
     for turn in sample.conversation.turns:
         lines.append(f"\n[{turn.index}] {turn.speaker.value}: {turn.text}")
         for span in sample.labels.pii_entities:
@@ -81,6 +92,9 @@ def review_batch(
     events = read_jsonl(ledger, ReviewEvent)
     count = 0
     for sample in samples:
+        if not reviewable(sample):
+            display(f"Skipped {sample.conversation.id}: missing, failed or stale judge verdict")
+            continue
         if not revisit and decision(sample, events) is not None:
             continue
         if count == batch_size:
@@ -139,7 +153,7 @@ def export_golden(samples: list[Sample], ledger: Path, destination: Path) -> Gol
     approvals: list[ReviewEvent] = []
     for sample in samples:
         latest = decision(sample, events)
-        if latest is not None and latest.action == "approve":
+        if latest is not None and latest.action == "approve" and reviewable(sample):
             validate_sample(sample)
             ensure_unique(sample, selected)
             selected.append(sample)

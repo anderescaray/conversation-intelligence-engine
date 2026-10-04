@@ -32,7 +32,14 @@ def test_generated_customer_turns_do_not_match_banking77_test(sample_factory: Ca
 def test_generator_has_no_holdout_or_example_dependency() -> None:
     root = Path(__file__).resolve().parents[2]
     generation = (root / "scripts/synth/generate.py").read_text()
-    prompt = (root / "prompts/synthetic/v1.yaml").read_text()
+    prompt = "\n".join(
+        path.read_text()
+        for path in (
+            *sorted((root / "prompts/synthetic").glob("v*.yaml")),
+            root / "prompts/synthetic_judge/v1.yaml",
+            root / "scripts/synth/scenarios.py",
+        )
+    )
     reference = read_jsonl(Path(__file__).with_name("banking77_test_fixture.jsonl"), Utterance)
     assert "from .audit" not in generation
     assert "banking77_test_fixture" not in generation

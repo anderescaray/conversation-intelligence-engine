@@ -1,0 +1,66 @@
+{
+  "target": 10,
+  "candidates": 0,
+  "human_approved": 0,
+  "attempts": 30,
+  "rejects": 30,
+  "reject_rate": 1.0,
+  "elapsed_s": 119.88914131699858,
+  "mean_attempt_s": 3.996304710566619,
+  "mean_accepted_attempt_s": null,
+  "input_tokens": 25933,
+  "output_tokens": 5190,
+  "cost_usd": 0.0,
+  "by_channel": {},
+  "by_intent": {},
+  "by_sentiment": {},
+  "by_resolved": {},
+  "by_escalation": {},
+  "by_pii": {},
+  "rejection_reasons": {
+    "repeated_block": 2,
+    "label_mismatch": 1,
+    "placeholder_inventory": 11,
+    "pii_placement": 13,
+    "invalid_evidence": 1,
+    "unowned_pii": 1,
+    "repeated_turn": 1
+  },
+  "rejection_categories": {
+    "validator": 28,
+    "judge": 2
+  },
+  "rejection_rates": {
+    "validator": 0.9333333333333333,
+    "judge": 0.06666666666666667
+  },
+  "judge_failed_labels": {
+    "resolved": 2,
+    "escalation_requested": 2
+  },
+  "sample_elapsed_s": {
+    "synth-v2-42-000": 23.1320039669954,
+    "synth-v2-42-001": 11.201591509008722,
+    "synth-v2-42-002": 10.617504702990118,
+    "synth-v2-42-003": 10.686697061995801,
+    "synth-v2-42-004": 8.324092434006161,
+    "synth-v2-42-005": 15.103135985002154,
+    "synth-v2-42-006": 9.880235010001343,
+    "synth-v2-42-007": 10.966998487994715,
+    "synth-v2-42-008": 11.266132956996444,
+    "synth-v2-42-009": 8.710749202007719
+  },
+  "timed_out_ids": [],
+  "missing_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ]
+}

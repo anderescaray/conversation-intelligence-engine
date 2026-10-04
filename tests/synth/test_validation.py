@@ -41,7 +41,13 @@ def test_missing_placeholder_and_escalation_rejected(draft_factory: Callable) ->
     with pytest.raises(Rejected, match="placeholder_inventory"):
         validate_draft(draft, scenario)
     draft = draft_factory(scenario)
-    draft.turns[4] = DraftTurn(speaker="customer", text="Thank you.")
+    draft.turns[0] = draft.turns[0].model_copy(
+        update={
+            "text": draft.turns[0].text.replace(
+                " I am frustrated and want to speak to a supervisor.", ""
+            )
+        }
+    )
     with pytest.raises(Rejected, match="escalation_evidence"):
         validate_draft(draft, scenario)
 

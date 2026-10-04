@@ -32,13 +32,14 @@ def test_offsets_cover_unicode_and_repeated_values(draft_factory: Callable) -> N
     turn = DraftTurn(speaker="customer", text=f"Café — {token}; again {token}.")
     updated = draft.model_copy(update={"turns": [turn, *draft.turns[1:]]})
     conversation, values, spans = insert_pii(updated, scenario)
-    assert len(spans) == 2
-    for span in spans:
+    repeated = [span for span in spans if span.slot_token == token]
+    assert len(repeated) == 2
+    for span in repeated:
         assert (
             conversation.turns[span.turn_index].text[span.start : span.end]
             == values[0].surface_form
         )
-    assert spans[0].start == len("Café — ")
+    assert repeated[0].start == len("Café — ")
 
 
 @pytest.mark.parametrize("field,value", [("start", -1), ("end", 99999), ("turn_index", 100)])

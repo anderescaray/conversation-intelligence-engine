@@ -6,7 +6,7 @@ from faker import Faker
 
 from convintel.contracts import Channel, Conversation, Speaker, Turn
 
-from .schema import Draft, PIISpan, PIIValue, Scenario
+from .schema import Draft, LegacyScenario, PIISpan, PIIValue, Placement, Scenario
 
 _DIGITS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 _SYMBOLS = {"@": "at", ".": "dot", "-": "dash", "_": "underscore", "+": "plus"}
@@ -45,7 +45,7 @@ def value_key(value: str, entity_type: str) -> str:
     )
 
 
-def values_for(scenario: Scenario) -> tuple[PIIValue, ...]:
+def values_for(scenario: Scenario | LegacyScenario) -> tuple[PIIValue, ...]:
     rng = random.Random(scenario.sample_seed)
     fake = Faker("en_US")
     fake.seed_instance(scenario.sample_seed)
@@ -57,19 +57,24 @@ def values_for(scenario: Scenario) -> tuple[PIIValue, ...]:
         "EMAIL_ADDRESS": lambda: f"user{rng.randint(100, 999)}@example.com",
         "ACCOUNT_NUMBER": lambda: f"9900{rng.randrange(1000000):06d}",
     }
-    values = []
-    for slot in scenario.slots:
-        canonical = factories[slot.entity_type]()
-        surface = spoken(canonical, slot.entity_type)
-        values.append(
-            PIIValue(
-                slot=slot,
-                canonical_value=canonical,
-                spoken_form=surface,
-                surface_form=surface if scenario.channel == "voice" else canonical,
-            )
+    values: dict[str, PIIValue] = {}
+    ordered = sorted(
+        scenario.slots, key=lambda s: isinstance(s, Placement) and s.exposure == "last_four"
+    )
+    for slot in ordered:
+        canonical = (
+            values[slot.source_token].canonical_value[-4:]
+            if isinstance(slot, Placement) and slot.source_token is not None
+            else factories[slot.entity_type]()
         )
-    return tuple(values)
+        surface = spoken(canonical, slot.entity_type)
+        values[slot.token] = PIIValue(
+            slot=slot,
+            canonical_value=canonical,
+            spoken_form=surface,
+            surface_form=surface if scenario.channel == "voice" else canonical,
+        )
+    return tuple(values[slot.token] for slot in scenario.slots)
 
 
 def insert_pii(

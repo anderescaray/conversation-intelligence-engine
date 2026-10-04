@@ -3,16 +3,20 @@ import asyncio
 import os
 import time
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal, cast
 
 from prometheus_client import REGISTRY
+from pydantic import BaseModel, ValidationError
 
-from convintel.config import Settings
+from convintel.config import LLMProvider, Settings
 from convintel.errors import ConvIntelError, LLMError
 from convintel.llm import LLMClient, load_prompt
 from convintel.llm.pricing import compute_cost
 from convintel.telemetry import setup, traced
 
+from .judge import configured_client, judge_sample, reviewable
 from .pii import insert_pii
 from .review import decision
 from .scenarios import scenarios
@@ -20,7 +24,8 @@ from .schema import (
     VERSION,
     Annotation,
     Attempt,
-    Provenance,
+    GenerationProvenance,
+    JudgeRecord,
     Report,
     ReviewEvent,
     RunSpec,
@@ -49,14 +54,24 @@ from .validation import (
 ROOT = Path(__file__).resolve().parents[2]
 
 
+class Progress(BaseModel):
+    phase: Literal["generation", "validation", "judge"] = "generation"
+    judge: JudgeRecord | None = None
+
+
 async def generate_sample(
     client: LLMClient,
     scenario: Scenario,
     run: RunSpec,
     attempt: int,
     scanner: NameScanner | None = None,
+    *,
+    judge_client: LLMClient | None = None,
+    previous: Sequence[Sample] = (),
+    progress: Progress | None = None,
 ) -> Sample:
-    prompt = await asyncio.to_thread(load_prompt, "synthetic", 1)
+    progress = progress or Progress()
+    prompt = await asyncio.to_thread(load_prompt, "synthetic", 2)
     if digest(prompt) != run.prompt_sha256:
         raise ConvIntelError("Prompt changed during generation; start a new run")
     with traced("synthetic.generate", version=VERSION) as span:
@@ -69,37 +84,44 @@ async def generate_sample(
             operator="synthetic",
             scenario=scenario.model_dump_json(),
         )
+        progress.phase = "validation"
         with traced("synthetic.validate", version=VERSION):
             await asyncio.to_thread(validate_draft, response.output, scenario, scanner)
         with traced("synthetic.pii", version=VERSION):
             conversation, values, entities = await asyncio.to_thread(
                 insert_pii, response.output, scenario
             )
-        sample = Sample(
-            conversation=conversation,
-            labels=Annotation(
-                id=scenario.id,
-                scenario=scenario,
-                pii_values=values,
-                pii_entities=entities,
-                provenance=Provenance(
-                    model_id=response.model_id,
-                    model_revision=run.model_revision,
-                    prompt_version=prompt.id,
-                    prompt_sha256=run.prompt_sha256,
-                    environment_sha256=run.environment_sha256,
-                    temperature=prompt.temperature,
-                    attempt=attempt,
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                    cost_usd=response.cost_usd,
-                    latency_ms=response.latency_ms,
-                    pii_scan="patterns+ner" if scanner else "patterns",
-                ),
+        labels = Annotation(
+            id=scenario.id,
+            scenario=scenario,
+            pii_values=values,
+            pii_entities=entities,
+            provenance=GenerationProvenance(
+                model_id=response.model_id,
+                model_revision=run.model_revision,
+                prompt_version=prompt.id,
+                prompt_sha256=run.prompt_sha256,
+                environment_sha256=run.environment_sha256,
+                temperature=prompt.temperature,
+                attempt=attempt,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                cost_usd=response.cost_usd,
+                latency_ms=response.latency_ms,
+                pii_scan="patterns+ner" if scanner else "patterns",
+                reasoning=run.reasoning,
             ),
         )
-        await asyncio.to_thread(validate_sample, sample, scanner)
-        return sample
+        sample = Sample(conversation=conversation, labels=labels)
+        with traced("synthetic.validate", version=VERSION):
+            await asyncio.to_thread(validate_sample, sample, scanner)
+            ensure_unique(sample, previous)
+        progress.phase = "judge"
+        verdict = await judge_sample(judge_client or client, sample, run)
+        progress.judge = verdict
+        return Sample(
+            conversation=conversation, labels=labels.model_copy(update={"judge": verdict})
+        )
 
 
 def usage(model_id: str) -> tuple[int, int]:
@@ -116,17 +138,22 @@ def usage(model_id: str) -> tuple[int, int]:
 
 
 def report(samples: list[Sample], attempts: list[Attempt], target: int) -> Report:
-    accepted = [attempt for attempt in attempts if attempt.accepted]
-    elapsed = sum(attempt.elapsed_s for attempt in attempts)
+    accepted = [a for a in attempts if a.accepted]
+    rejected = [a for a in attempts if not a.accepted]
+    elapsed = sum(a.elapsed_s for a in attempts)
+    categories = Counter(a.category for a in rejected)
+    sample_times: dict[str, float] = {}
+    for attempt in attempts:
+        sample_times[attempt.id] = sample_times.get(attempt.id, 0) + attempt.elapsed_s
     return Report(
         target=target,
         candidates=len(samples),
         attempts=len(attempts),
-        rejects=len(attempts) - len(accepted),
-        reject_rate=(len(attempts) - len(accepted)) / len(attempts) if attempts else 0,
+        rejects=len(rejected),
+        reject_rate=len(rejected) / len(attempts) if attempts else 0,
         elapsed_s=elapsed,
         mean_attempt_s=elapsed / len(attempts) if attempts else 0,
-        mean_accepted_attempt_s=(sum(a.elapsed_s for a in accepted) / len(accepted))
+        mean_accepted_attempt_s=sum(a.elapsed_s for a in accepted) / len(accepted)
         if accepted
         else None,
         input_tokens=sum(a.input_tokens for a in attempts),
@@ -137,33 +164,47 @@ def report(samples: list[Sample], attempts: list[Attempt], target: int) -> Repor
         by_channel=dict(Counter(s.conversation.channel.value for s in samples)),
         by_intent=dict(Counter(s.labels.scenario.intent for s in samples)),
         by_sentiment=dict(
-            Counter(t.value for s in samples for t in s.labels.scenario.customer_trajectory)
+            Counter(
+                f"{s.labels.scenario.start_sentiment}->{s.labels.scenario.end_sentiment}"
+                for s in samples
+                if isinstance(s.labels, Annotation)
+            )
         ),
         by_resolved=dict(Counter(str(s.labels.scenario.resolved).lower() for s in samples)),
         by_escalation=dict(
             Counter(str(s.labels.scenario.escalation_requested).lower() for s in samples)
         ),
         by_pii=dict(Counter(e.entity_type for s in samples for e in s.labels.pii_entities)),
-        rejection_reasons=dict(Counter(a.reason for a in attempts if not a.accepted)),
+        rejection_reasons=dict(Counter(a.reason for a in rejected)),
+        rejection_categories=dict(categories),
+        rejection_rates={key: count / len(attempts) for key, count in categories.items()},
+        judge_failed_labels=dict(
+            Counter(label for a in rejected if a.judge for label in a.judge.verdict.failed_labels)
+        ),
+        sample_elapsed_s=sample_times,
+        timed_out_ids=sorted({a.id for a in rejected if a.category == "timeout"}),
         missing_indices=sorted(set(range(target)) - {s.labels.scenario.index for s in samples}),
     )
 
 
-def prepare_run(
-    directory: Path,
-    run: RunSpec,
-    resume: bool,
-) -> tuple[list[Sample], list[Attempt]]:
+def prepare_run(directory: Path, run: RunSpec, resume: bool) -> tuple[list[Sample], list[Attempt]]:
     path = directory / "run.json"
     if directory.exists():
         if not resume or not path.is_file():
             raise ConvIntelError("Output exists; use --resume only for a matching generator run")
-        if RunSpec.model_validate_json(path.read_text()) != run:
+        try:
+            matching = RunSpec.model_validate_json(path.read_text()) == run
+        except ValidationError:
+            matching = False
+        if not matching:
             raise ConvIntelError("Resume configuration differs from the recorded run")
     else:
         directory.mkdir(parents=True)
         write_json(path, run)
-    return load_samples(directory), read_jsonl(directory / "attempts.jsonl", Attempt)
+    samples = load_samples(directory)
+    if any(not reviewable(s) for s in samples):
+        raise ConvIntelError("Current runs may contain only judge-passed, unchanged candidates")
+    return samples, read_jsonl(directory / "attempts.jsonl", Attempt)
 
 
 def save_exports(directory: Path, samples: list[Sample], result: Report) -> None:
@@ -185,17 +226,33 @@ async def generate_run(
     scanner: NameScanner | None = None,
     regenerate: set[int] | None = None,
     review_jsonl: Path | None = None,
+    judge_client: LLMClient | None = None,
+    sample_timeout_s: float = 120,
+    reasoning: bool | None = None,
 ) -> Report:
-    if not 1 <= n <= 150 or max_attempts < 1 or seed < 0:
-        raise ConvIntelError("Need n in [1,150], positive max_attempts and nonnegative seed")
-    prompt = await asyncio.to_thread(load_prompt, "synthetic", 1)
+    if not 1 <= n <= 150 or max_attempts < 1 or seed < 0 or not 0 < sample_timeout_s <= 120:
+        raise ConvIntelError(
+            "Need n in [1,150], positive attempts, nonnegative seed and timeout in (0,120]"
+        )
+    judge_client = judge_client or client
+    prompt, judge_prompt = await asyncio.gather(
+        asyncio.to_thread(load_prompt, "synthetic", 2),
+        asyncio.to_thread(load_prompt, "synthetic_judge", 1),
+    )
     run = RunSpec(
         seed=seed,
         model_id=client.model_id,
         model_revision=model_revision,
         prompt_sha256=digest(prompt),
+        judge_model_id=judge_client.model_id,
+        judge_model_revision=model_revision
+        if judge_client.model_id == client.model_id
+        else "unresolved",
+        judge_prompt_sha256=digest(judge_prompt),
         environment_sha256=await asyncio.to_thread(file_hash, ROOT / "uv.lock"),
         pii_scan="patterns+ner" if scanner else "patterns",
+        sample_timeout_s=sample_timeout_s,
+        reasoning=reasoning,
     )
     samples, attempts = await asyncio.to_thread(prepare_run, directory, run, resume)
     if any(sample.labels.scenario.index >= n for sample in samples):
@@ -205,44 +262,83 @@ async def generate_run(
     )
     regenerate = regenerate or set()
     rejected = {
-        sample.labels.scenario.index
-        for sample in samples
-        if (event := decision(sample, events)) is not None and event.action == "reject"
+        s.labels.scenario.index
+        for s in samples
+        if (event := decision(s, events)) is not None and event.action == "reject"
     }
     if regenerate and (not resume or not regenerate <= rejected):
         raise ConvIntelError("Regeneration requires --resume and explicitly human-rejected indices")
     existing = {sample.conversation.id for sample in samples}
+    model_ids = {client.model_id, judge_client.model_id}
     for scenario in scenarios(seed)[:n]:
         replacing = scenario.index in regenerate
+        previous_attempts = [a for a in attempts if a.id == scenario.id]
         if scenario.id in existing and not replacing:
             continue
-        already = sum(a.id == scenario.id for a in attempts)
+        if not replacing and any(a.category == "timeout" for a in previous_attempts):
+            continue
+        consumed = 0 if replacing else sum(a.elapsed_s for a in previous_attempts)
+        deadline = asyncio.get_running_loop().time() + max(0, sample_timeout_s - consumed)
+        already = len(previous_attempts)
         limit = already + max_attempts if replacing else max_attempts
         for attempt in range(already + 1, limit + 1):
-            before = usage(client.model_id)
+            before = {model: usage(model) for model in model_ids}
             start = time.perf_counter()
             candidate: Sample | None = None
+            progress = Progress()
             reason = "accepted"
+            category: Literal["accepted", "validator", "judge", "timeout", "llm"] = "accepted"
             try:
-                candidate = await generate_sample(client, scenario, run, attempt, scanner)
-                ensure_unique(candidate, (s for s in samples if s.conversation.id != scenario.id))
-            except (Rejected, LLMError) as exc:
-                reason = str(exc) if isinstance(exc, Rejected) else "llm_error"
+                async with asyncio.timeout_at(deadline):
+                    candidate = await generate_sample(
+                        client,
+                        scenario,
+                        run,
+                        attempt,
+                        scanner,
+                        judge_client=judge_client,
+                        previous=[s for s in samples if s.conversation.id != scenario.id],
+                        progress=progress,
+                    )
+            except TimeoutError:
                 candidate = None
+                reason, category = "sample_timeout", "timeout"
+            except Rejected as exc:
+                candidate = None
+                reason, category, progress.judge = str(exc), exc.category, exc.judge
+            except LLMError as exc:
+                candidate = None
+                if isinstance(exc.__cause__, TimeoutError):
+                    reason, category = "sample_timeout", "timeout"
+                else:
+                    reason, category = "llm_error", "llm"
             elapsed = time.perf_counter() - start
-            after = usage(client.model_id)
-            tokens_in, tokens_out = (after[i] - before[i] for i in (0, 1))
+            tokens_in = tokens_out = 0
+            costs: list[float | None] = []
+            for model_id in model_ids:
+                after = usage(model_id)
+                delta_in, delta_out = (after[i] - before[model_id][i] for i in (0, 1))
+                tokens_in += delta_in
+                tokens_out += delta_out
+                provider, model = model_id.split(":", 1)
+                costs.append(compute_cost(cast(LLMProvider, provider), model, delta_in, delta_out))
+            incomplete_paid = category in {"timeout", "llm"} and any(
+                not m.startswith("ollama:") for m in model_ids
+            )
             record = Attempt(
                 id=scenario.id,
                 attempt=attempt,
                 accepted=candidate is not None,
                 reason=reason,
+                category=category,
+                phase=progress.phase,
+                judge=progress.judge,
                 elapsed_s=elapsed,
                 input_tokens=tokens_in,
                 output_tokens=tokens_out,
                 cost_usd=None
-                if reason == "llm_error" and settings.llm_provider != "ollama"
-                else compute_cost(settings.llm_provider, settings.llm_model, tokens_in, tokens_out),
+                if incomplete_paid or any(c is None for c in costs)
+                else sum(c or 0 for c in costs),
             )
             await asyncio.to_thread(append_jsonl, directory / "attempts.jsonl", record)
             attempts.append(record)
@@ -251,14 +347,14 @@ async def generate_run(
                 samples = [s for s in samples if s.conversation.id != scenario.id]
                 samples.append(candidate)
             print(record.model_dump_json(), flush=True)
-            if candidate is not None:
+            if candidate is not None or category == "timeout":
                 break
     samples.sort(key=lambda sample: sample.labels.scenario.index)
     result = report(samples, attempts, n).model_copy(
         update={
             "human_approved": sum(
-                (event := decision(sample, events)) is not None and event.action == "approve"
-                for sample in samples
+                (event := decision(s, events)) is not None and event.action == "approve"
+                for s in samples
             )
         }
     )
@@ -267,9 +363,7 @@ async def generate_run(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Generate evaluation candidates, never training data"
-    )
+    parser = argparse.ArgumentParser(description="Generate judge-passed evaluation candidates")
     parser.add_argument("--n", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=Path)
@@ -280,7 +374,7 @@ def main() -> int:
     parser.add_argument("--regenerate-index", type=int, action="append")
     parser.add_argument("--review-jsonl", type=Path)
     parser.add_argument("--max-attempts", type=int, default=3)
-    parser.add_argument("--timeout", type=float, default=300)
+    parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--ner-model")
     parser.add_argument("--trace", action="store_true")
     args = parser.parse_args()
@@ -299,8 +393,9 @@ def main() -> int:
         result = asyncio.run(
             generate_run(
                 destination,
-                LLMClient(settings, timeout_s=args.timeout),
+                configured_client(settings, "synthetic", 2),
                 settings,
+                judge_client=configured_client(settings, "synthetic_judge", 1),
                 seed=args.seed,
                 n=args.n,
                 model_revision=args.model_revision,
@@ -309,6 +404,8 @@ def main() -> int:
                 scanner=scanner,
                 regenerate=set(args.regenerate_index or []),
                 review_jsonl=args.review_jsonl,
+                sample_timeout_s=args.timeout,
+                reasoning=False if settings.llm_provider == "ollama" else None,
             )
         )
     except ConvIntelError as exc:

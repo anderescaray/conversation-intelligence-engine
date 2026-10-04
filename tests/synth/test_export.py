@@ -14,7 +14,11 @@ from scripts.synth.schema import Annotation, ReviewEvent, Sample
 from scripts.synth.storage import append_jsonl, digest, read_jsonl
 
 
-def test_only_matching_human_approvals_export(tmp_path: Path, sample_factory: Callable) -> None:
+def test_only_matching_human_approvals_export(
+    tmp_path: Path,
+    sample_factory: Callable,
+    with_judge: Callable,
+) -> None:
     samples: list[Sample] = []
     ledger = tmp_path / "review.jsonl"
     for scenario in scenarios(42):
@@ -30,6 +34,7 @@ def test_only_matching_human_approvals_export(tmp_path: Path, sample_factory: Ca
                 )
             }
         )
+        sample = with_judge(sample)
         samples.append(sample)
         append_jsonl(
             ledger,
