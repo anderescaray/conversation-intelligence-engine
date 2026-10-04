@@ -7,11 +7,11 @@ that the pipeline can route low-confidence cases to the LLM verifier (ADR-0001).
 ```python
 from convintel.operators.intent import IntentOperator
 
-operator = IntentOperator()          # models:/intent-classifier@champion
-await operator.warmup()              # at startup: resolve, load, one dummy inference
+operator = IntentOperator()  # models:/intent-classifier@champion
+await operator.warmup()  # at startup: resolve, load, one dummy inference
 result = await operator.run(conversation)
-result.output        # IntentOutput(label, confidence, source="classifier", top_k=[(label, p), ...])
-operator.threshold   # τ shipped with the loaded model version
+result.output  # IntentOutput(label, confidence, source="classifier", top_k=[(label, p), ...])
+operator.threshold  # τ shipped with the loaded model version
 ```
 
 Training, calibration and the threshold study live in [`training/intent/`](../../../../training/intent/README.md).
