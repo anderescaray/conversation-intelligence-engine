@@ -8,7 +8,7 @@ versioned prompt files.
 
 | Name | What it is |
 |---|---|
-| `LLMClient(settings=None, *, chat_model=None, timeout_s=60, max_retries=3, backoff_base_s=0.5)` | The client. Share one instance. |
+| `LLMClient(settings=None, *, chat_model=None, timeout_s=60, max_retries=3, backoff_base_s=0.5, sleep=asyncio.sleep, rand=random.random)` | The client. Share one instance. |
 | `await client.structured(schema, prompt, *, operator, **variables) -> LLMResponse[schema]` | Renders the prompt and returns a validated `schema` instance. |
 | `LLMResponse` | `output`, `model_id`, `input_tokens`, `output_tokens`, `cost_usd`, `latency_ms`. |
 | `load_prompt(name, version=None)` | Loads `prompts/<name>/v<N>.yaml`. `None` loads the latest version. |
@@ -39,8 +39,9 @@ response.output, response.cost_usd, prompt.id  # Persona(...), USD or None, "my_
   If the answer does not fit the schema, the client sends **one** repair request that quotes
   the validation error. If the second answer also fails, it raises `LLMError`. Tokens from
   both attempts are counted.
-- **Retries:** rate limits, timeouts and dropped connections are retried with exponential
-  backoff (`backoff_base_s * 2**n`, up to `max_retries`). Provider SDK retries are disabled so
+- **Retries:** rate limits, Anthropic 5xx (including 529 overloaded), timeouts and dropped
+  connections are retried with jittered exponential backoff (`backoff_base_s * 2**n`, scaled by a
+  random factor in [0.5, 1.5), up to `max_retries`). Provider SDK retries are disabled so
   attempts are not multiplied. `timeout_s` bounds the whole call, retries and repair included.
 - **Errors:** retries exhausted, provider API errors, timeouts, invalid output and a missing
   API key all raise `convintel.errors.LLMError`. Other exceptions are bugs and propagate.
@@ -49,7 +50,8 @@ response.output, response.cost_usd, prompt.id  # Persona(...), USD or None, "my_
 - **Telemetry:** counters `convintel_llm_tokens_total{model,direction}` and
   `convintel_llm_cost_usd_total{model,operator}`. Provider-call spans come from OpenInference's
   LangChain instrumentation, which the telemetry lane sets up. Prompt and conversation text is
-  never logged.
+  never logged. Both counters are updated on every exit path, so failed calls (including a
+  failed repair) still count towards tokens and cost.
 
 ## Providers
 

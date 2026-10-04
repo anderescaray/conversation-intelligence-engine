@@ -47,9 +47,19 @@ def prompt() -> Prompt:
     )
 
 
+def _no_jitter() -> float:
+    """Jitter factor 0.5 + 0.5 = 1.0, so delays equal the plain exponential backoff."""
+    return 0.5
+
+
 def _client(responses: list[AIMessage | Exception], **kwargs: Any) -> LLMClient:
     model = FakeStructuredChatModel(responses=responses)
-    return LLMClient(_settings(), chat_model=model, **{"sleep": no_sleep, **kwargs})
+    defaults: dict[str, Any] = {"sleep": no_sleep, "rand": _no_jitter}
+    return LLMClient(_settings(), chat_model=model, **{**defaults, **kwargs})
+
+
+def _status_error(cls: type[anthropic.APIStatusError], status: int) -> anthropic.APIStatusError:
+    return cls("provider error", response=httpx2.Response(status, request=_REQUEST), body=None)
 
 
 def _fake(client: LLMClient) -> FakeStructuredChatModel:
@@ -125,6 +135,52 @@ async def test_transient_errors_retry_with_exponential_backoff(prompt: Prompt) -
     assert delays == [0.5, 1.0]
 
 
+@pytest.mark.parametrize(
+    ("cls", "status"),
+    [
+        (anthropic.InternalServerError, 500),
+        (anthropic.APIStatusError, 502),
+        (anthropic.ServiceUnavailableError, 503),
+        (anthropic.OverloadedError, 529),
+    ],
+    ids=["500", "502", "503", "529-overloaded"],
+)
+async def test_anthropic_server_errors_are_retried(
+    prompt: Prompt, cls: type[anthropic.APIStatusError], status: int
+) -> None:
+    client = _client([_status_error(cls, status), tool_answer(Answer, _VALID)])
+    response = await client.structured(Answer, prompt, operator="demo", conversation="hi")
+    assert response.output.label == "billing"
+    assert len(_fake(client).calls) == 2
+
+
+async def test_client_errors_other_than_429_are_not_retried(prompt: Prompt) -> None:
+    client = _client([_status_error(anthropic.BadRequestError, 400), tool_answer(Answer, _VALID)])
+    with pytest.raises(LLMError, match="call failed"):
+        await client.structured(Answer, prompt, operator="demo", conversation="hi")
+    assert len(_fake(client).calls) == 1
+
+
+async def test_backoff_is_jittered_by_the_injected_random_source(prompt: Prompt) -> None:
+    delays: list[float] = []
+    draws = iter([0.0, 0.999])
+
+    async def record(delay: float) -> None:
+        delays.append(delay)
+
+    client = _client(
+        [TimeoutError(), TimeoutError(), tool_answer(Answer, _VALID)],
+        sleep=record,
+        rand=lambda: next(draws),
+        backoff_base_s=0.5,
+    )
+
+    await client.structured(Answer, prompt, operator="demo", conversation="hi")
+
+    # Factor is 0.5 + rand: attempt 0 -> 0.5 * 0.5, attempt 1 -> 1.0 * 1.499.
+    assert delays == pytest.approx([0.25, 1.499])
+
+
 async def test_retries_exhausted_raise_llm_error(prompt: Prompt) -> None:
     client = _client(
         [ConnectionError(), ConnectionError(), ollama.ResponseError("busy", 429)],
@@ -189,6 +245,33 @@ async def test_metrics_count_tokens_and_cost(prompt: Prompt) -> None:
     assert sample("convintel_llm_tokens_total", tokens_in) - before[0] == 1000
     assert sample("convintel_llm_tokens_total", tokens_out) - before[1] == 100
     assert sample("convintel_llm_cost_usd_total", cost) - before[2] == pytest.approx(0.0015)
+
+
+async def test_failed_repair_still_counts_tokens_and_cost(prompt: Prompt) -> None:
+    model_id = "anthropic:claude-haiku-4-5"
+    cost = {"model": model_id, "operator": "failed-repair-test"}
+    tokens_in = {"model": model_id, "direction": "in"}
+
+    def sample(name: str, labels: dict[str, str]) -> float:
+        return REGISTRY.get_sample_value(name, labels) or 0.0
+
+    cost_before = sample("convintel_llm_cost_usd_total", cost)
+    tokens_before = sample("convintel_llm_tokens_total", tokens_in)
+    client = _client(
+        [
+            tool_answer(Answer, _INVALID, input_tokens=100, output_tokens=20),
+            tool_answer(Answer, _INVALID, input_tokens=100, output_tokens=20),
+        ]
+    )
+
+    with pytest.raises(LLMError, match="after one repair attempt"):
+        await client.structured(Answer, prompt, operator="failed-repair-test", conversation="hi")
+
+    # Both billed attempts are recorded even though the call failed.
+    assert sample("convintel_llm_tokens_total", tokens_in) - tokens_before == 200
+    assert sample("convintel_llm_cost_usd_total", cost) - cost_before == pytest.approx(
+        2 * (100 * 1.0 + 20 * 5.0) / 1_000_000
+    )
 
 
 def test_missing_api_key_raises_clear_llm_error() -> None:

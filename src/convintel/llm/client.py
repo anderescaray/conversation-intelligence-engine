@@ -12,6 +12,7 @@ conversation text, only model, operator and token counts.
 import asyncio
 import json
 import logging
+import random
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -51,9 +52,15 @@ class LLMResponse[T: BaseModel](BaseModel):
 
 
 def _is_retryable(exc: BaseException) -> bool:
-    """Rate limits, timeouts and dropped connections are transient; everything else is not."""
+    """Rate limits, server-side failures, timeouts and dropped connections are transient.
+
+    Anthropic 5xx includes 529 `OverloadedError`, which is common under load and is not a
+    subclass of `InternalServerError`, so the status code is checked instead of the class.
+    """
     if isinstance(exc, ollama.ResponseError):
         return exc.status_code == 429
+    if isinstance(exc, anthropic.APIStatusError):
+        return exc.status_code == 429 or exc.status_code >= 500
     return isinstance(
         exc,
         anthropic.RateLimitError
@@ -100,8 +107,8 @@ def build_chat_model(settings: Settings, *, temperature: float) -> BaseChatModel
 class LLMClient:
     """Async structured-output client. One instance can be shared across operators.
 
-    `chat_model` overrides the provider model (tests inject fakes). `sleep` is injectable so
-    backoff can be asserted without waiting.
+    `chat_model` overrides the provider model (tests inject fakes). `sleep` and `rand` (a
+    source of floats in [0, 1)) are injectable so backoff can be asserted deterministically.
     """
 
     def __init__(
@@ -113,6 +120,7 @@ class LLMClient:
         max_retries: int = 3,
         backoff_base_s: float = 0.5,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        rand: Callable[[], float] = random.random,
     ) -> None:
         self._settings = settings or get_settings()
         self._chat_model = chat_model
@@ -121,6 +129,7 @@ class LLMClient:
         self._max_retries = max_retries
         self._backoff_base_s = backoff_base_s
         self._sleep = sleep
+        self._rand = rand
 
     @property
     def model_id(self) -> str:
@@ -149,6 +158,7 @@ class LLMClient:
             schema, include_raw=True
         )
         tokens = [0, 0]
+        cost: float | None = None
         start = time.perf_counter()
         try:
             async with asyncio.timeout(self._timeout_s):
@@ -166,18 +176,14 @@ class LLMClient:
         except TimeoutError as exc:
             raise LLMError(f"LLM call exceeded the {self._timeout_s:g}s timeout") from exc
         finally:
-            self._record_tokens(*tokens)
+            # Failed calls are billed too, so usage and cost are recorded on every exit path.
+            cost = self._record_usage(operator, *tokens)
 
         if not isinstance(parsed, schema):
             raise LLMError(
                 f"{self.model_id} returned output that does not fit {schema.__name__} "
                 "after one repair attempt"
             )
-        cost = compute_cost(
-            self._settings.llm_provider, self._settings.llm_model, tokens[0], tokens[1]
-        )
-        if cost is not None:
-            LLM_COST_USD.labels(model=self.model_id, operator=operator).inc(cost)
         return LLMResponse(
             output=parsed,
             model_id=self.model_id,
@@ -198,7 +204,8 @@ class LLMClient:
                 break
             except Exception as exc:
                 if _is_retryable(exc) and attempt < self._max_retries:
-                    delay = self._backoff_base_s * 2**attempt
+                    # Jitter in [0.5x, 1.5x) spreads out clients that were rate limited together.
+                    delay = self._backoff_base_s * 2**attempt * (0.5 + self._rand())
                     logger.warning(
                         "transient LLM error %s, retry %d/%d in %.2fs (model=%s)",
                         type(exc).__name__,
@@ -227,9 +234,16 @@ class LLMClient:
             tokens[1] += raw.usage_metadata["output_tokens"]
         return result
 
-    def _record_tokens(self, input_tokens: int, output_tokens: int) -> None:
+    def _record_usage(self, operator: str, input_tokens: int, output_tokens: int) -> float | None:
+        """Increment token and cost counters; returns the cost (None if the model is unpriced)."""
         LLM_TOKENS.labels(model=self.model_id, direction="in").inc(input_tokens)
         LLM_TOKENS.labels(model=self.model_id, direction="out").inc(output_tokens)
+        cost = compute_cost(
+            self._settings.llm_provider, self._settings.llm_model, input_tokens, output_tokens
+        )
+        if cost is not None:
+            LLM_COST_USD.labels(model=self.model_id, operator=operator).inc(cost)
+        return cost
 
 
 def _repair_message(result: dict[str, Any], schema: type[BaseModel]) -> HumanMessage:
