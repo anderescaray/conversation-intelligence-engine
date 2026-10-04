@@ -20,8 +20,10 @@
 - Needs `transformers` and `torch`, both in the `ml` group (ADR-0005), imported only when the
   model loads. The production image must install them (T13). The model weights are fetched
   from the Hugging Face hub on first load and cached.
-- Errors: `OperatorError("sentiment", "sentiment inference failed (<ExceptionType>)")`, with no
-  chained cause, so text quoted in third-party messages never reaches spans or logs.
+- Errors: any failure becomes
+  `OperatorError("sentiment", "sentiment inference failed (<ExceptionType>)")`, with no chained
+  cause, so text quoted in third-party messages never reaches spans or logs (same policy as the
+  PII redactor).
 - Span `operator.sentiment` with `conversation.id`, `operator.version`, `model.id`,
   `sentiment.customer_turns`, `sentiment.overall`.
 

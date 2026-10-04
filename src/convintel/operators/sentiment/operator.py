@@ -11,7 +11,6 @@ from convintel.errors import OperatorError
 
 from .model import (
     DEFAULT_MODEL_ID,
-    LabelMappingError,
     SentimentModel,
     SentimentScores,
     get_sentiment_model,
@@ -53,9 +52,12 @@ class SentimentOperator:
             span.set_attribute("sentiment.customer_turns", len(texts))
             try:
                 scores = await asyncio.to_thread(self._predict, texts)
-            except (OSError, LabelMappingError) as exc:
-                # Fixed message and no chained cause, so turn text quoted in a third-party
-                # message never reaches span exception events or logs.
+            except OperatorError:
+                raise
+            except Exception as exc:
+                # Any third-party message (tokenizer, torch, label mapping) can quote turn text.
+                # Keep only the type, and cut the chain: span exception events format the whole
+                # traceback, causes included. Same policy as the PII redactor.
                 raise OperatorError(
                     self.name, f"sentiment inference failed ({type(exc).__name__})"
                 ) from None

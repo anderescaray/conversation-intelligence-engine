@@ -5,7 +5,14 @@ import traceback
 from collections.abc import Sequence
 
 import pytest
-from sentiment_fakes import NEG, NEU, POS, FakeSentimentModel, make_conversation
+from sentiment_fakes import (
+    NEG,
+    NEU,
+    POS,
+    FakeSentimentModel,
+    RecordingTracer,
+    make_conversation,
+)
 
 from convintel.contracts import Operator, Sentiment, SentimentOutput, Speaker
 from convintel.errors import OperatorError
@@ -113,21 +120,30 @@ async def test_model_failures_become_operator_errors(error: Exception) -> None:
     assert excinfo.value.operator == "sentiment"
 
 
-async def test_errors_never_carry_turn_text() -> None:
-    secret = "my card is <CREDIT_CARD> and I'm furious"
+@pytest.mark.parametrize("error_type", [OSError, RuntimeError, ValueError, LabelMappingError])
+async def test_errors_never_carry_turn_text(
+    error_type: type[Exception], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mirror of the PII test: a redaction miss must not leak through an error either."""
+    secret = "call Marisol Quintavalle on 415-555-0123"
 
     class Leaky(FakeSentimentModel):
         def predict(self, texts: Sequence[str]) -> list[SentimentScores]:
-            raise OSError(f"tokenizer failed on {texts[0]!r}")
+            raise error_type(f"pipeline failed on {texts[0]!r}")
+
+    tracer = RecordingTracer()
+    monkeypatch.setattr(operator_module, "_tracer", tracer)
 
     with pytest.raises(OperatorError) as excinfo:
         await SentimentOperator(model=Leaky({})).run(make_conversation((C, secret)))
 
     error = excinfo.value
-    assert error.message == "sentiment inference failed (OSError)"
+    assert error.message == f"sentiment inference failed ({error_type.__name__})"
     assert error.__cause__ is None
     assert error.__suppress_context__
     assert secret not in "".join(traceback.format_exception(error))
+    assert len(tracer.recorded) == 1
+    assert secret not in tracer.recorded[0]
 
 
 async def test_concurrent_runs_are_serialized() -> None:

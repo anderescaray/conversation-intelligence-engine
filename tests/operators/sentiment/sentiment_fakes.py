@@ -1,8 +1,11 @@
 """Test doubles for the sentiment model. Texts are synthetic."""
 
 import threading
-from collections.abc import Sequence
+import traceback
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 from convintel.contracts import Channel, Conversation, Speaker, Turn
 from convintel.operators.sentiment import SentimentScores
@@ -26,6 +29,21 @@ class FakeSentimentModel:
         self.batches.append(list(texts))
         self.threads.append(threading.get_ident())
         return [self._scores[t] for t in texts]
+
+
+class RecordingTracer:
+    """Records exceptions the way the OTel SDK does: the full traceback, causes included."""
+
+    def __init__(self) -> None:
+        self.recorded: list[str] = []
+
+    @contextmanager
+    def start_as_current_span(self, name: str) -> Iterator[MagicMock]:
+        try:
+            yield MagicMock()
+        except BaseException as exc:
+            self.recorded.append("".join(traceback.format_exception(exc)))
+            raise
 
 
 def make_conversation(*turns: tuple[Speaker, str]) -> Conversation:
