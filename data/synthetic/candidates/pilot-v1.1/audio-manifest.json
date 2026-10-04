@@ -1,0 +1,61 @@
+{
+  "generator_version": "1.0.1",
+  "source_sha256": "3e78e58ea14b4e9567b18674926e8b52aa249d18b7a1a0a18df7c86329eb1a72",
+  "piper_version": "1.3.0",
+  "sample_rate": 16000,
+  "sample_width": 2,
+  "channels": ["customer", "agent"],
+  "gap_frames": 4000,
+  "noise_scale": 0.0,
+  "noise_w_scale": 0.0,
+  "length_scale": 1.0,
+  "customer_voice": {
+    "model_id": "en_US-ljspeech-high",
+    "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+    "speaker_id": null,
+    "model_sha256": "5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a",
+    "config_sha256": "7e1f4634af596d83cca997fb7a931ba80b70f8a316a2655ee69c55365e0ace14",
+    "dataset_license": "Public domain (LJ Speech)",
+    "model_license": "MIT (rhasspy/piper-voices repository metadata)",
+    "model_card": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/high/MODEL_CARD",
+    "directory": "ljspeech/high"
+  },
+  "agent_voice": {
+    "model_id": "en_US-libritts-high",
+    "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+    "speaker_id": 0,
+    "model_sha256": "9127a559e11603f10b366d1a20ac7426826081dbc521de4c2420c57728d73f0f",
+    "config_sha256": "2efdc6d7f954588b8180132cbd9b8001933fdd00932c92bc92fd0d2028a9eb3d",
+    "dataset_license": "CC BY 4.0 (LibriTTS, speaker p3922)",
+    "model_license": "MIT (rhasspy/piper-voices repository metadata)",
+    "model_card": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/libritts/high/MODEL_CARD",
+    "directory": "libritts/high"
+  },
+  "files": [
+    {
+      "conversation_id": "synth-v1-42-002",
+      "filename": "synth-v1-42-002.wav",
+      "sha256": "8d90c529cdd2b4c5fb57806f8126a5dd4d4adb34a4e81af67155f46897417fbb",
+      "frames": 558646,
+      "duration_s": 34.915375,
+      "render_s": 4.86506801500218
+    },
+    {
+      "conversation_id": "synth-v1-42-005",
+      "filename": "synth-v1-42-005.wav",
+      "sha256": "912f27b46d55e87ef00b778bfa7ecabfb5b503e34e24fa7002a718912cb32d68",
+      "frames": 488973,
+      "duration_s": 30.5608125,
+      "render_s": 4.641686006998498
+    },
+    {
+      "conversation_id": "synth-v1-42-008",
+      "filename": "synth-v1-42-008.wav",
+      "sha256": "007109e121c4a81c1826b980c1fdab48ca3f3085f16d619dc8d168a715739295",
+      "frames": 697765,
+      "duration_s": 43.6103125,
+      "render_s": 6.396260984998662
+    }
+  ],
+  "conversations_sha256": "8a6a91637ec8da6ed81339219bfbeaff8627a0d3221523b1768c8b578d8d00e3"
+}

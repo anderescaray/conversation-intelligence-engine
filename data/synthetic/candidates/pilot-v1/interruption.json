@@ -1,0 +1,11 @@
+{
+  "status": "aborted_preflight",
+  "generator_version": "1.0.0",
+  "completed_attempts": 8,
+  "accepted_candidates": 0,
+  "rejection_reasons": {"turn_count": 7, "escalation_evidence": 1},
+  "interrupted_inflight_attempt": "synth-v1-42-002 attempt 3",
+  "inflight_tokens_and_elapsed": null,
+  "reason": "The broad Draft schema did not constrain the exact scenario length. The process was stopped after observing repeated rejections. Completed attempts remain in attempts.jsonl; no rejected dialogue text was persisted.",
+  "replacement": "../pilot-v1.1 with generator 1.0.1 and scenario-specific structured schema"
+}

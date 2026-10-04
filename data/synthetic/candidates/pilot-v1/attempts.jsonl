@@ -1,0 +1,8 @@
+{"id":"synth-v1-42-000","attempt":1,"accepted":false,"reason":"turn_count","elapsed_s":19.67943713800196,"input_tokens":547,"output_tokens":459,"cost_usd":0.0}
+{"id":"synth-v1-42-000","attempt":2,"accepted":false,"reason":"turn_count","elapsed_s":11.813023180002347,"input_tokens":547,"output_tokens":545,"cost_usd":0.0}
+{"id":"synth-v1-42-000","attempt":3,"accepted":false,"reason":"turn_count","elapsed_s":70.78730399800043,"input_tokens":547,"output_tokens":3388,"cost_usd":0.0}
+{"id":"synth-v1-42-001","attempt":1,"accepted":false,"reason":"turn_count","elapsed_s":13.5967659070011,"input_tokens":580,"output_tokens":634,"cost_usd":0.0}
+{"id":"synth-v1-42-001","attempt":2,"accepted":false,"reason":"turn_count","elapsed_s":10.040218532998551,"input_tokens":580,"output_tokens":488,"cost_usd":0.0}
+{"id":"synth-v1-42-001","attempt":3,"accepted":false,"reason":"escalation_evidence","elapsed_s":76.1099948379997,"input_tokens":580,"output_tokens":3592,"cost_usd":0.0}
+{"id":"synth-v1-42-002","attempt":1,"accepted":false,"reason":"turn_count","elapsed_s":9.307392979000724,"input_tokens":575,"output_tokens":434,"cost_usd":0.0}
+{"id":"synth-v1-42-002","attempt":2,"accepted":false,"reason":"turn_count","elapsed_s":11.467024046000006,"input_tokens":575,"output_tokens":558,"cost_usd":0.0}

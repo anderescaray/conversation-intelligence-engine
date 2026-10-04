@@ -1,0 +1,15 @@
+{"id":"synth-v1-42-000","attempt":1,"accepted":true,"reason":"accepted","elapsed_s":61.21520320399941,"input_tokens":547,"output_tokens":2818,"cost_usd":0.0}
+{"id":"synth-v1-42-001","attempt":1,"accepted":true,"reason":"accepted","elapsed_s":13.466422779998538,"input_tokens":580,"output_tokens":623,"cost_usd":0.0}
+{"id":"synth-v1-42-002","attempt":1,"accepted":false,"reason":"llm_error","elapsed_s":300.0038239610003,"input_tokens":0,"output_tokens":0,"cost_usd":0.0}
+{"id":"synth-v1-42-002","attempt":2,"accepted":true,"reason":"accepted","elapsed_s":62.08779534200221,"input_tokens":575,"output_tokens":2883,"cost_usd":0.0}
+{"id":"synth-v1-42-003","attempt":1,"accepted":true,"reason":"accepted","elapsed_s":13.13161298400155,"input_tokens":574,"output_tokens":627,"cost_usd":0.0}
+{"id":"synth-v1-42-004","attempt":1,"accepted":true,"reason":"accepted","elapsed_s":12.325653875999706,"input_tokens":571,"output_tokens":606,"cost_usd":0.0}
+{"id":"synth-v1-42-005","attempt":1,"accepted":true,"reason":"accepted","elapsed_s":12.46167653700104,"input_tokens":545,"output_tokens":603,"cost_usd":0.0}
+{"id":"synth-v1-42-006","attempt":1,"accepted":true,"reason":"accepted","elapsed_s":11.170424054998875,"input_tokens":573,"output_tokens":545,"cost_usd":0.0}
+{"id":"synth-v1-42-007","attempt":1,"accepted":false,"reason":"escalation_evidence","elapsed_s":15.94578414300122,"input_tokens":579,"output_tokens":759,"cost_usd":0.0}
+{"id":"synth-v1-42-007","attempt":2,"accepted":false,"reason":"placeholder_inventory","elapsed_s":16.09370679499989,"input_tokens":579,"output_tokens":774,"cost_usd":0.0}
+{"id":"synth-v1-42-007","attempt":3,"accepted":true,"reason":"accepted","elapsed_s":12.229596732999198,"input_tokens":579,"output_tokens":567,"cost_usd":0.0}
+{"id":"synth-v1-42-008","attempt":1,"accepted":true,"reason":"accepted","elapsed_s":16.27619827500166,"input_tokens":574,"output_tokens":774,"cost_usd":0.0}
+{"id":"synth-v1-42-009","attempt":1,"accepted":false,"reason":"speaker_order","elapsed_s":11.48690889000136,"input_tokens":573,"output_tokens":555,"cost_usd":0.0}
+{"id":"synth-v1-42-009","attempt":2,"accepted":false,"reason":"speaker_order","elapsed_s":11.188027421998413,"input_tokens":573,"output_tokens":549,"cost_usd":0.0}
+{"id":"synth-v1-42-009","attempt":3,"accepted":true,"reason":"accepted","elapsed_s":11.193421362000663,"input_tokens":573,"output_tokens":543,"cost_usd":0.0}

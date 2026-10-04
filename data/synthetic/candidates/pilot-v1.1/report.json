@@ -1,0 +1,58 @@
+{
+  "target": 10,
+  "candidates": 10,
+  "human_approved": 0,
+  "attempts": 15,
+  "rejects": 5,
+  "reject_rate": 0.3333333333333333,
+  "elapsed_s": 580.276256359004,
+  "mean_attempt_s": 38.68508375726694,
+  "mean_accepted_attempt_s": 22.555800514800286,
+  "input_tokens": 7995,
+  "output_tokens": 13226,
+  "cost_usd": 0.0,
+  "by_channel": {
+    "chat": 7,
+    "voice": 3
+  },
+  "by_intent": {
+    "exchange_via_app": 1,
+    "pending_top_up": 1,
+    "terminate_account": 1,
+    "cancel_transfer": 1,
+    "edit_personal_details": 1,
+    "receiving_money": 1,
+    "pending_cash_withdrawal": 1,
+    "fiat_currency_support": 1,
+    "visa_or_mastercard": 1,
+    "pin_blocked": 1
+  },
+  "by_sentiment": {
+    "positive": 26,
+    "neutral": 5,
+    "negative": 11
+  },
+  "by_resolved": {
+    "false": 7,
+    "true": 3
+  },
+  "by_escalation": {
+    "false": 8,
+    "true": 2
+  },
+  "by_pii": {
+    "CREDIT_CARD": 5,
+    "IBAN_CODE": 3,
+    "PHONE_NUMBER": 3,
+    "EMAIL_ADDRESS": 6,
+    "ACCOUNT_NUMBER": 3,
+    "PERSON": 4
+  },
+  "rejection_reasons": {
+    "llm_error": 1,
+    "escalation_evidence": 1,
+    "placeholder_inventory": 1,
+    "speaker_order": 2
+  },
+  "missing_indices": []
+}

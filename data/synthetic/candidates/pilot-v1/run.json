@@ -1,0 +1,9 @@
+{
+  "seed": 42,
+  "generator_version": "1.0.0",
+  "model_id": "ollama:qwen3:8b",
+  "model_revision": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+  "prompt_sha256": "be91d8385b11cd8277f0a1967e3d6b89487dfc0baba2844397c1171c31d8d675",
+  "environment_sha256": "4bf03e0da8ad844c61a168b3b054e64d930c6734496bffab4158dc0a9fdc242e",
+  "pii_scan": "patterns+ner"
+}
