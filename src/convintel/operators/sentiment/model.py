@@ -1,10 +1,11 @@
 """Sentiment model adapter and its process-wide lazy singleton.
 
 The operator depends on the small `SentimentModel` protocol rather than on transformers, so
-unit tests inject a fake and never import torch. `transformers` is imported only when the real
-model is loaded; it needs torch at that point (the `ml` group locally, see ADR-0005).
+unit tests inject a fake and never import torch. `transformers` and torch are in the `ml`
+dependency group (ADR-0005) and are imported only when the real model is loaded.
 """
 
+import importlib
 import threading
 from collections.abc import Callable, Sequence
 from functools import cache
@@ -90,9 +91,11 @@ def _to_scores(labels: list[dict[str, Any]]) -> SentimentScores:
 
 def load_hf_model(model_id: str) -> HFSentimentModel:
     """Download (first time) and load `model_id` on the default device (GPU if torch sees one)."""
-    from transformers import pipeline
-
-    return HFSentimentModel(pipeline("text-classification", model=model_id), model_id)
+    # Imported by name: transformers lives in the `ml` group, so CI (and pyright there) runs
+    # without it, and importing it eagerly would also pull torch into every process.
+    transformers = importlib.import_module("transformers")
+    classifier = transformers.pipeline("text-classification", model=model_id)
+    return HFSentimentModel(classifier, model_id)
 
 
 _lock = threading.Lock()

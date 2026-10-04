@@ -14,13 +14,18 @@
 ## Runtime
 
 - The model is a lazy, lock-protected per-process singleton (`get_sentiment_model`), loaded on
-  the first conversation with customer turns; inference runs in a worker thread.
-- Needs `torch` at load time. torch is only in the `ml` group today (ADR-0005), so the
-  production image must add a CPU or CUDA build (T13).
+  the first conversation with customer turns. Inference runs in a worker thread under a
+  process-wide lock (transformers pipelines are not thread-safe), so one batch runs at a time
+  per process: **scale with worker processes**, not threads.
+- Needs `transformers` and `torch`, both in the `ml` group (ADR-0005), imported only when the
+  model loads. The production image must install them (T13). The model weights are fetched
+  from the Hugging Face hub on first load and cached.
+- Errors: `OperatorError("sentiment", "sentiment inference failed (<ExceptionType>)")`, with no
+  chained cause, so text quoted in third-party messages never reaches spans or logs.
 - Span `operator.sentiment` with `conversation.id`, `operator.version`, `model.id`,
   `sentiment.customer_turns`, `sentiment.overall`.
 
 ## Tests
 
 - Unit: `FakeSentimentModel` (no transformers, no torch, no network).
-- Integration (`-m integration`, skipped without torch): real model on a synthetic call.
+- Integration (`-m integration`, skipped without the `ml` group): real model on a synthetic call.

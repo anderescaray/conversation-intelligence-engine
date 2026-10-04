@@ -37,10 +37,29 @@ is kept, e.g. order numbers.
   `OperatorError("pii", "... run `uv sync --group ml`")`.
 - The analyzer (spaCy pipeline) is a lazy, lock-protected per-process singleton
   (`get_analyzer`). First use takes a few seconds.
-- Analysis runs in a worker thread (`asyncio.to_thread`).
+- Analysis runs in a worker thread (`asyncio.to_thread`) under a process-wide lock: spaCy and
+  Presidio are not documented as thread-safe and every redactor shares the analyzer. One
+  conversation is analyzed at a time per process, so **scale with worker processes**
+  (uvicorn/gunicorn workers, more replicas), not threads.
 - Span `operator.pii` with `conversation.id`, `operator.version`, `model.id`, `pii.entity_count`.
   Never put text in span attributes or logs.
+- Errors: any failure becomes `OperatorError("pii", "redaction failed (<ExceptionType>)")`, with
+  no chained cause. Third-party messages can quote the input, and OTel span exception events
+  format the whole traceback, causes included. A missing model keeps its own explicit message.
 - Only `language="en"` is supported; other languages raise `OperatorError`.
+
+## Limitations
+
+- **Recall 28/28 is optimistic.** The synthetic set is small (24 cases) and was written by the
+  same agent that wrote the recognizers. The real number comes from the T06 golden set.
+- **English only.** No other spaCy model or language-specific recognizers are loaded.
+- **Phone numbers sit just above the threshold.** Presidio scores unvalidated phone matches 0.4,
+  against a 0.35 threshold. Raising the threshold, or a Presidio change to that score, would
+  silently stop redacting phones; the unit tests would catch it.
+- **Equal-score overlaps keep the earliest span's label.** The redacted range is still the
+  union, so nothing leaks, but the reported `entity_type` is arbitrary in that case.
+- **Spoken-style numbers are not covered** ("four one five, five five five...", as ASR may
+  produce them).
 
 ## Tests
 

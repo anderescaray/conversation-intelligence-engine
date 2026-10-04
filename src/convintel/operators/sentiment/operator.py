@@ -1,6 +1,7 @@
 """Sentiment operator: per-turn customer sentiment plus a recency-weighted overall label."""
 
 import asyncio
+import threading
 import time
 
 from opentelemetry import trace
@@ -18,6 +19,13 @@ from .model import (
 from .trajectory import overall_sentiment
 
 _tracer = trace.get_tracer(__name__)
+
+_inference_lock = threading.Lock()
+"""Serializes inference across worker threads.
+
+transformers pipelines are not thread-safe and every operator shares the process-wide model.
+One batch at a time per process; scale with worker processes.
+"""
 
 
 class SentimentOperator:
@@ -46,7 +54,11 @@ class SentimentOperator:
             try:
                 scores = await asyncio.to_thread(self._predict, texts)
             except (OSError, LabelMappingError) as exc:
-                raise OperatorError(self.name, f"{type(exc).__name__}: {exc}") from exc
+                # Fixed message and no chained cause, so turn text quoted in a third-party
+                # message never reaches span exception events or logs.
+                raise OperatorError(
+                    self.name, f"sentiment inference failed ({type(exc).__name__})"
+                ) from None
             output = SentimentOutput(
                 overall=overall_sentiment(scores),
                 customer_trajectory=[s.label for s in scores],
@@ -65,4 +77,5 @@ class SentimentOperator:
         if not texts:
             return []
         model = self._model or get_sentiment_model(self._model_id)
-        return model.predict(texts)
+        with _inference_lock:
+            return model.predict(texts)

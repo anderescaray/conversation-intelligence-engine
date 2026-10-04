@@ -16,7 +16,6 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
     "pyyaml>=6.0.3",
-    "transformers>=5.18.0",
 ]
 
 [dependency-groups]
@@ -34,6 +33,7 @@ dev = [
 ml = [
     "en-core-web-lg",
     "torch>=2.7",
+    "transformers>=5.18.0",
 ]
 
 [[tool.uv.index]]

@@ -1,6 +1,12 @@
+import asyncio
 import threading
+import time
+import traceback
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 import spacy.cli
@@ -242,3 +248,72 @@ class TestMergeOverlaps:
         merge_overlaps([first, RecognizerResult("CREDIT_CARD", 5, 15, 1.0)])
 
         assert (first.entity_type, first.end, first.score) == ("PHONE_NUMBER", 10, 0.4)
+
+
+class _RecordingTracer:
+    """Records exceptions the way the OTel SDK does: the full traceback, causes included."""
+
+    def __init__(self) -> None:
+        self.recorded: list[str] = []
+
+    @contextmanager
+    def start_as_current_span(self, name: str) -> Iterator[MagicMock]:
+        try:
+            yield MagicMock()
+        except BaseException as exc:
+            self.recorded.append("".join(traceback.format_exception(exc)))
+            raise
+
+
+async def test_errors_never_carry_turn_text(
+    analyzer: AnalyzerEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secret = "marisol.q@example.com"
+
+    def failing_analyze(text: str, **kwargs: Any) -> list[RecognizerResult]:
+        raise ValueError(f"cannot parse {text!r}")
+
+    tracer = _RecordingTracer()
+    monkeypatch.setattr(redactor_module, "_tracer", tracer)
+    monkeypatch.setattr(analyzer, "analyze", failing_analyze)
+
+    with pytest.raises(OperatorError) as excinfo:
+        await PIIRedactor(analyzer=analyzer).run(make_conversation(f"mail {secret}"))
+
+    error = excinfo.value
+    assert error.message == "redaction failed (ValueError)"
+    assert error.__cause__ is None
+    assert error.__suppress_context__
+    assert secret not in "".join(traceback.format_exception(error))
+    assert len(tracer.recorded) == 1
+    assert secret not in tracer.recorded[0]
+
+
+async def test_concurrent_runs_are_serialized(
+    analyzer: AnalyzerEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shared analyzer is not thread-safe; to_thread alone would run these in parallel."""
+    active = 0
+    peak = 0
+    calls = 0
+    counter_lock = threading.Lock()
+    analyze = analyzer.analyze
+
+    def slow_analyze(*args: Any, **kwargs: Any) -> list[RecognizerResult]:
+        nonlocal active, peak, calls
+        with counter_lock:
+            active += 1
+            calls += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        with counter_lock:
+            active -= 1
+        return analyze(*args, **kwargs)
+
+    monkeypatch.setattr(analyzer, "analyze", slow_analyze)
+    redactors = [PIIRedactor(analyzer=analyzer) for _ in range(6)]
+
+    await asyncio.gather(*(r.run(make_conversation("hello")) for r in redactors))
+
+    assert calls == 6
+    assert peak == 1

@@ -1,4 +1,7 @@
+import asyncio
 import threading
+import time
+import traceback
 from collections.abc import Sequence
 
 import pytest
@@ -108,3 +111,46 @@ async def test_model_failures_become_operator_errors(error: Exception) -> None:
         await SentimentOperator(model=Broken({})).run(make_conversation((C, "hi")))
 
     assert excinfo.value.operator == "sentiment"
+
+
+async def test_errors_never_carry_turn_text() -> None:
+    secret = "my card is <CREDIT_CARD> and I'm furious"
+
+    class Leaky(FakeSentimentModel):
+        def predict(self, texts: Sequence[str]) -> list[SentimentScores]:
+            raise OSError(f"tokenizer failed on {texts[0]!r}")
+
+    with pytest.raises(OperatorError) as excinfo:
+        await SentimentOperator(model=Leaky({})).run(make_conversation((C, secret)))
+
+    error = excinfo.value
+    assert error.message == "sentiment inference failed (OSError)"
+    assert error.__cause__ is None
+    assert error.__suppress_context__
+    assert secret not in "".join(traceback.format_exception(error))
+
+
+async def test_concurrent_runs_are_serialized() -> None:
+    """The shared pipeline is not thread-safe; to_thread alone would run these in parallel."""
+
+    class Slow(FakeSentimentModel):
+        active = 0
+        peak = 0
+        lock = threading.Lock()
+
+        def predict(self, texts: Sequence[str]) -> list[SentimentScores]:
+            with self.lock:
+                Slow.active += 1
+                Slow.peak = max(Slow.peak, Slow.active)
+            time.sleep(0.02)
+            with self.lock:
+                Slow.active -= 1
+            return super().predict(texts)
+
+    model = Slow({"hi": NEU})
+    operators = [SentimentOperator(model=model) for _ in range(6)]
+
+    await asyncio.gather(*(op.run(make_conversation((C, "hi"))) for op in operators))
+
+    assert len(model.batches) == 6
+    assert Slow.peak == 1

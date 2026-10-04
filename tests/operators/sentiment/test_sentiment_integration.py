@@ -1,4 +1,4 @@
-"""Real model from the Hugging Face hub: needs network and torch (`uv sync --group ml`)."""
+"""Real model from the Hugging Face hub: needs network and the `ml` group (torch, transformers)."""
 
 import pytest
 from sentiment_fakes import make_conversation
@@ -13,6 +13,7 @@ C, A = Speaker.CUSTOMER, Speaker.AGENT
 
 async def test_real_model_tracks_a_recovering_customer() -> None:
     pytest.importorskip("torch")
+    pytest.importorskip("transformers")
     conversation = make_conversation(
         (C, "This is the third time my internet has dropped today and I am furious."),
         (A, "I'm sorry about that. Let me check the line."),

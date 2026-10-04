@@ -1,6 +1,7 @@
 """PII redaction operator: the boundary after which no component sees raw PII."""
 
 import asyncio
+import threading
 import time
 from collections.abc import Sequence
 
@@ -15,6 +16,14 @@ from convintel.errors import OperatorError
 from .engine import DEFAULT_SPACY_MODEL, SUPPORTED_ENTITIES, get_analyzer
 
 _tracer = trace.get_tracer(__name__)
+
+_inference_lock = threading.Lock()
+"""Serializes analysis across worker threads.
+
+spaCy pipelines and Presidio engines are not documented as thread-safe, and every redactor
+shares the process-wide analyzer. One analysis at a time per process; scale with worker
+processes.
+"""
 
 DEFAULT_SCORE_THRESHOLD = 0.35
 """Keeps Presidio's unvalidated phone matches (0.4) and drops bare account-like numbers (0.05).
@@ -57,8 +66,13 @@ class PIIRedactor:
             span.set_attribute("model.id", self.model_id)
             try:
                 output = await asyncio.to_thread(self._redact, conversation)
-            except (OSError, ValueError) as exc:
-                raise OperatorError(self.name, f"{type(exc).__name__}: {exc}") from exc
+            except OperatorError:
+                raise
+            except Exception as exc:
+                # Third-party messages can quote the input, which is raw PII here. Keep only
+                # the type, and cut the chain: span exception events format the whole
+                # traceback, causes included.
+                raise OperatorError(self.name, f"redaction failed ({type(exc).__name__})") from None
             span.set_attribute("pii.entity_count", len(output.entities))
 
         return OperatorResult[PIIOutput](
@@ -72,6 +86,10 @@ class PIIRedactor:
     def _redact(self, conversation: Conversation) -> PIIOutput:
         """Blocking part, run in a worker thread so the event loop keeps serving requests."""
         analyzer = self._analyzer or get_analyzer(self._spacy_model)
+        with _inference_lock:
+            return self._redact_with(analyzer, conversation)
+
+    def _redact_with(self, analyzer: AnalyzerEngine, conversation: Conversation) -> PIIOutput:
         entities: list[PIIEntity] = []
         turns: list[Turn] = []
         for turn in conversation.turns:

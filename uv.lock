@@ -216,7 +216,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
-    { name = "transformers" },
 ]
 
 [package.dev-dependencies]
@@ -233,6 +232,7 @@ ml = [
     { name = "en-core-web-lg" },
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "transformers" },
 ]
 
 [package.metadata]
@@ -248,7 +248,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings", specifier = ">=2.4" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "transformers", specifier = ">=5.18.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -265,6 +264,7 @@ ml = [
     { name = "en-core-web-lg", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.7" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.7", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "transformers", specifier = ">=5.18.0" },
 ]
 
 [[package]]

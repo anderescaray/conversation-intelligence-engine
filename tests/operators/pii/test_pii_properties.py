@@ -1,6 +1,7 @@
 """Property-based checks: no generated PII value survives redaction, whatever the mix."""
 
 import asyncio
+import re
 
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -29,11 +30,18 @@ def _iban_gb(bank: str, digits: str) -> str:
     return f"GB{98 - int(rearranged) % 97:02d}{bban}"
 
 
+def _compact(text: str) -> str:
+    """Drop the separators people and ASR insert in numbers: spaces, dashes, dots, parens, +."""
+    return re.sub(r"[\s\-.()+]", "", text)
+
+
+def _digits(text: str) -> str:
+    return re.sub(r"\D", "", text)
+
+
 def _group(value: str, sep: str) -> str:
     return sep.join(value[i : i + 4] for i in range(0, len(value), 4))
 
-
-_digits = st.text(alphabet="0123456789", min_size=1, max_size=1)
 
 phones = st.builds(
     lambda area, line, fmt: fmt.format(a=area, n=line),
@@ -103,8 +111,13 @@ def test_no_original_pii_survives(
 
     redacted = result.output.redacted_conversation
     for value in values:
+        compact = _compact(value)
+        digits = _digits(value)
         for turn in redacted.turns:
             assert value not in turn.text, f"leaked {value!r} in {turn.text!r}"
+            assert compact not in _compact(turn.text), f"leaked {compact!r} in {turn.text!r}"
+            if len(digits) >= 6:
+                assert digits not in _digits(turn.text), f"leaked {digits!r} in {turn.text!r}"
 
 
 @_SETTINGS
