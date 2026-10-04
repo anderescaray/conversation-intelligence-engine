@@ -1,5 +1,7 @@
 import asyncio
 import math
+import subprocess
+import sys
 import threading
 import wave
 from collections.abc import Iterator
@@ -11,11 +13,33 @@ import numpy as np
 import pytest
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from prometheus_client import REGISTRY
 
 from convintel.contracts import Channel, Speaker, Transcriber
 from convintel.errors import TranscriptionError
 from convintel.transcription import WhisperSettings, WhisperTranscriber
 from convintel.transcription import whisper as implementation
+
+
+def test_importing_transcription_does_not_import_ml_backends() -> None:
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import convintel.transcription; "
+            "assert not {'faster_whisper', 'ctranslate2', 'torch'} & sys.modules.keys()",
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_missing_backend_reports_install_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        implementation.importlib, "import_module", Mock(side_effect=ModuleNotFoundError)
+    )
+    with pytest.raises(TranscriptionError, match="uv sync --group ml"):
+        implementation._import_backend("faster_whisper")
 
 
 def segment(
@@ -37,7 +61,11 @@ def backend(monkeypatch: pytest.MonkeyPatch) -> Mock:
         result(segment(2, 3, "Synthetic customer.", 0.9)),
         result(segment(0, 1, "Synthetic agent.", 0.6)),
     ]
-    monkeypatch.setattr(implementation, "WhisperModel", factory)
+    module = SimpleNamespace(
+        WhisperModel=factory,
+        download_model=Mock(side_effect=AssertionError("Unexpected model cache access")),
+    )
+    monkeypatch.setattr(implementation, "_import_backend", Mock(return_value=module))
     return factory
 
 
@@ -50,7 +78,18 @@ async def test_stereo_is_split_sorted_and_measured(
 ) -> None:
     monkeypatch.setattr(implementation, "perf_counter", Mock(side_effect=[100.0, 104.0]))
     transcriber: Transcriber = WhisperTranscriber(WhisperSettings(model_path=model_path))
+    count = (
+        REGISTRY.get_sample_value("convintel_asr_realtime_factor_count", {"model": "small"}) or 0
+    )
+    total = REGISTRY.get_sample_value("convintel_asr_realtime_factor_sum", {"model": "small"}) or 0
     conversation = await transcriber.transcribe(str(audio), "synthetic-call")
+    assert (
+        REGISTRY.get_sample_value("convintel_asr_realtime_factor_count", {"model": "small"})
+        == count + 1
+    )
+    assert REGISTRY.get_sample_value(
+        "convintel_asr_realtime_factor_sum", {"model": "small"}
+    ) == pytest.approx(total + 0.4)
     assert conversation.channel is Channel.VOICE
     assert not conversation.redacted
     assert conversation.id == "synthetic-call"
@@ -164,7 +203,9 @@ async def test_cache_resolution_is_offline(
     audio: Path, model_path: Path, backend: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     resolver = Mock(return_value=str(model_path))
-    monkeypatch.setattr(implementation, "download_model", resolver)
+    monkeypatch.setattr(
+        implementation._import_backend("faster_whisper.utils"), "download_model", resolver
+    )
     await WhisperTranscriber(WhisperSettings(model_size="tiny")).transcribe(str(audio), "cached")
     resolver.assert_called_once_with(
         "tiny", local_files_only=True, cache_dir=None, use_auth_token=False
@@ -175,7 +216,9 @@ async def test_missing_cache_is_actionable(
     audio: Path, backend: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        implementation, "download_model", Mock(side_effect=FileNotFoundError("private-path"))
+        implementation._import_backend("faster_whisper.utils"),
+        "download_model",
+        Mock(side_effect=FileNotFoundError("private-path")),
     )
     with pytest.raises(TranscriptionError, match="download_model") as error:
         await WhisperTranscriber().transcribe(str(audio), "no-model")
@@ -183,9 +226,18 @@ async def test_missing_cache_is_actionable(
     backend.assert_not_called()
 
 
+async def test_official_small_layout_without_preprocessor(
+    audio: Path, model_path: Path, backend: Mock
+) -> None:
+    (model_path / "preprocessor_config.json").unlink()
+    conversation = await WhisperTranscriber(WhisperSettings(model_path=model_path)).transcribe(
+        str(audio), "official-small-layout"
+    )
+    assert len(conversation.turns) == 2
+
+
 @pytest.mark.parametrize(
-    "missing",
-    ["tokenizer.json", "model.bin", "config.json", "preprocessor_config.json", "vocabulary.txt"],
+    "missing", ["tokenizer.json", "model.bin", "config.json", "vocabulary.txt"]
 )
 async def test_incomplete_model_never_reaches_backend(
     audio: Path, model_path: Path, backend: Mock, missing: str
@@ -241,11 +293,17 @@ async def test_lazy_inference_errors_are_safe(
 
     backend.return_value.transcribe.side_effect = None
     backend.return_value.transcribe.return_value = (broken(), SimpleNamespace(language="en"))
+    count = (
+        REGISTRY.get_sample_value("convintel_asr_realtime_factor_count", {"model": "small"}) or 0
+    )
     with pytest.raises(TranscriptionError) as error:
         await WhisperTranscriber(WhisperSettings(model_path=model_path)).transcribe(
             str(audio), "failure"
         )
     assert "private transcript" not in str(error.value)
+    assert (
+        REGISTRY.get_sample_value("convintel_asr_realtime_factor_count", {"model": "small"}) or 0
+    ) == count
     (span,) = spans.get_finished_spans()
     assert span.status.status_code is StatusCode.ERROR
     assert not span.events

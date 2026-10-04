@@ -2,8 +2,8 @@
 
 Estas funciones devuelven los contratos congelados `Conversation`/`Turn`; no son endpoints
 HTTP ni realizan descargas. Requieren `twilio` (validación oficial local de firmas) y
-`opentelemetry-api` (trazas). La incorporación de dependencias al manifiesto corresponde al
-propietario del repositorio, fuera de los paths permitidos de T01.
+`opentelemetry-api` (trazas), incluidos en las dependencias base. `uv sync` basta para
+usar estos normalizadores y ejecutar sus pruebas; no se requiere el grupo `ml`.
 
 ## Chat JSON
 

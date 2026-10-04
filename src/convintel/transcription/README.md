@@ -1,135 +1,172 @@
 # ASR local con faster-whisper
 
-`WhisperTranscriber` satisface el protocolo congelado `Transcriber` y devuelve `Conversation`.
+`WhisperTranscriber` satisface el contrato congelado `Transcriber` y devuelve `Conversation`.
 No es un operador de análisis ni devuelve `OperatorResult`. No hay pyannote, endpoints HTTP,
-descargas de grabaciones, exporters OTel ni declaraciones de métricas Prometheus en este módulo.
+descargas de grabaciones ni declaraciones de métricas Prometheus en este módulo.
 
-## Uso y configuración
+## Instalación y configuración
+
+```bash
+uv sync
+```
+
+El entorno normal permite importar ingesta/transcripción y ejecutar todas las unitarias sin
+faster-whisper, CTranslate2 ni torch. El backend real se importa de forma lazy siguiendo el
+patrón de T02. Para inferencia, tanto CPU como CUDA, instalar el grupo opt-in existente:
+
+```bash
+uv sync --group ml
+```
+
+Sin backend, una petición real falla con `TranscriptionError` y el comando de instalación.
+Las opciones son argumentos de constructor, agrupados en el modelo Pydantic `WhisperSettings`:
 
 ```python
+from pathlib import Path
 from convintel.transcription import WhisperSettings, WhisperTranscriber
 
-transcriber = WhisperTranscriber(WhisperSettings(model_size="small"))
-conversation = await transcriber.transcribe("/srv/audio/synthetic.wav", "synthetic-call-001")
+transcriber = WhisperTranscriber(WhisperSettings(model_path=Path("models/whisper-small")))
+conversation = await transcriber.transcribe("/srv/audio/call.wav", "call-001")
 ```
 
-`WhisperSettings` es un modelo Pydantic inmutable de opciones explícitas, NO otro lector de
-environment. Defaults: `small`, CPU `int8`, cuatro threads, idioma autodetectado. También
-admite `tiny`, `base`, `medium`, `large-v3`, `model_path`, `cache_dir`, `language`, `device`
-y `stereo_speakers`. Los archivos de `model_path` deben corresponder a `model_size`.
+Defaults: `small`, CPU `int8`, cuatro threads, idioma autodetectado. Opciones: `model_size`
+(`tiny`, `base`, `small`, `medium`, `large-v3`), `model_path`, `cache_dir`, `device`,
+`cpu_threads`, `language`, `stereo_speakers`. Los pesos deben corresponder a `model_size`.
+No se añadieron ajustes globales ni variables de entorno. Follow-up T12:
+**wire WhisperSettings to env** cuando se construya el endpoint/composición de la aplicación.
 
-**Integración pendiente del propietario:** mover/conectar las opciones ASR a
-`convintel.config.Settings` y añadir sus variables a `.env.example`. Esos archivos no están
-en el alcance permitido de T01. Hasta entonces pasar las opciones explícitamente; no se
-leen variables ASR ocultas ni se duplica la configuración global.
+## Aprovisionamiento explícito: una vez, antes del servicio
+
+Desde la raíz, este comando **sí descarga** el modelo `small` deliberadamente al directorio
+conocido `models/whisper-small`, ignorado por Git. No se ejecuta desde runtime ni desde tests:
+
+```bash
+uv run --group ml python -c "from faster_whisper.utils import download_model; download_model('small', output_dir='models/whisper-small', use_auth_token=False)"
+```
+
+Pasar esa ruta mediante `WhisperSettings(model_path=Path("models/whisper-small"))`. En
+producción, aprovisionar y montar el directorio de solo lectura antes de aceptar peticiones.
+Si se omite `model_path`, solo se busca el modelo en la caché local, nunca en Internet.
+
+Se exigen `model.bin`, `config.json`, `tokenizer.json` y `vocabulary.json` o `vocabulary.txt`
+antes de construir el backend. `preprocessor_config.json` es opcional: el snapshot oficial
+`small` no lo incluye y faster-whisper usa defaults locales. El tokenizer sí es obligatorio:
+faster-whisper puede intentar descargarlo si falta incluso con `local_files_only=True`.
+Búsqueda en caché y constructor siempre usan carga local; no se usan tokens Hugging Face
+locales. Si faltan archivos obligatorios, se lanza un error de aprovisionamiento.
+
+## Audio, roles y privacidad
 
 Se aceptan rutas locales y URIs `file://` locales, WAV/MP3/FLAC/OGG mono o estéreo. PyAV
-remuestrea a 16 kHz conservando los canales. Otros esquemas, playlists/demuxers no permitidos,
-archivos vacíos, inválidos o de más de dos canales fallan con `TranscriptionError`.
-La allowlist del decodificador impide que un archivo local fuerce solicitudes de red nativas.
-T12 debe imponer límites de tamaño/duración, descargar las grabaciones autenticadas y
-combinar los resultados con la metadata y `started_at` originales de la llamada.
+remuestrea a 16 kHz conservando los canales. La allowlist de demuxers/protocolos rechaza
+playlists y solicitudes de red nativas; no se descargan URLs `RecordingUrl`. Entradas vacías,
+inválidas o de más de dos canales fallan con `TranscriptionError`.
 
-- Estéreo: izquierda → `customer`, derecha → `agent` por defecto. No es una garantía sobre
-  la dirección de una llamada Twilio; cambiar `stereo_speakers=(Speaker.AGENT, Speaker.CUSTOMER)`
-  cuando el flujo de llamada lo requiera.
-- Mono: `unknown`. No se inventa diarización de varios interlocutores en un solo canal.
-- Un turno por segmento no vacío; orden cronológico estable y reindexación desde cero,
-  preservando el speaker y los timestamps relativos al audio. Se permiten solapamientos.
-- `asr_confidence = exp(avg_logprob)` acotada a [0, 1]: media geométrica de probabilidades
-  de tokens del segmento, no una probabilidad calibrada ni una media aritmética de palabras.
-  No se fusionan segmentos en este lane.
-- Silencio: conversación sin turnos. VAD usa el recurso ONNX incluido con faster-whisper,
-  no un modelo descargado durante la petición. El primer canal con texto aporta el idioma.
-- `redacted=False`: el llamante no debe registrar texto ni enviar la conversación a operadores
-  antes de T02. `started_at` es la hora UTC de producción del resultado si se usa ASR aislado.
+- Estéreo: izquierda → `customer`, derecha → `agent`, con `stereo_speakers` configurable
+  según el sentido real de la llamada Twilio. Mono → `unknown`, sin inventar diarización.
+- Un turno por segmento no vacío, orden cronológico estable, índices consecutivos y
+  timestamps relativos al audio. Se permiten solapamientos.
+- `asr_confidence = exp(avg_logprob)` acotada a [0,1]: aproximación geométrica de las
+  probabilidades de tokens del segmento, no una probabilidad calibrada. No se fusionan segmentos.
+- Silencio → conversación sin turnos. VAD usa el ONNX incluido en faster-whisper, sin descarga.
+  El primer canal con texto determina el idioma.
+- `redacted=False`. No registrar la conversación completa ni saltarse T02. `started_at`
+  corresponde a la producción del resultado ASR aislado; T12 conservará el inicio y metadata
+  originales, impondrá límites de audio y descargará las grabaciones autenticadas.
 
-La carga del modelo es lazy y se reutiliza por instancia. Decodificación e inferencia se
-hacen fuera del event loop con `asyncio.to_thread`. Un lock en el worker serializa el acceso
-al modelo incluso si una coroutine es cancelada: cancelar la espera no interrumpe CTranslate2.
+La carga se reutiliza por instancia. Decodificación e inferencia se ejecutan fuera del event
+loop con `asyncio.to_thread`; un lock en el worker serializa el modelo incluso si se cancela
+una coroutine. Cancelar la espera no interrumpe CTranslate2.
 
-## Pesos: aprovisionamiento explícito, nunca descarga silenciosa
+## CPU, CUDA y observabilidad
 
-**Estos comandos sí descargan pesos; ejecutarlos deliberadamente antes de iniciar el servicio.**
-No se ejecutan desde pruebas ni desde `WhisperTranscriber` en modo online.
+CPU `int8` es el default. `device="cuda"` solicita float16. Un `RuntimeError` o `ValueError`
+en carga/iteración provoca un único reintento completo en CPU int8, descartando resultados
+parciales y conservando CPU para futuras llamadas. El span registra `asr.fallback=cpu_int8`,
+no la excepción original. Un fallo nativo que termine el proceso no es recuperable mediante
+este mecanismo; la integración CUDA se ejecuta separadamente de CPU.
 
-```bash
-uv run python -c "from faster_whisper.utils import download_model; download_model('small')"
-```
+El span `asr.transcribe` incluye `conversation.id`, `asr.model`, `audio.duration_s`,
+`asr.device`, `asr.realtime_factor`; nunca texto, rutas, URLs ni eventos de excepción.
+Los fallos marcan estado ERROR. Se observa el histograma compartido
+`convintel.telemetry.metrics.ASR_REALTIME_FACTOR`, etiqueta `model`, una vez por transcripción
+exitosa y nunca en fallo. No se declara ni registra otro histograma.
 
-Para desplegar un directorio autocontenido:
+RTF = (decodificación + carga + inferencia) / duración real del archivo. El trabajo de ambos
+canales se divide por una sola duración, no por el doble. Cold incluye carga; warm reutiliza
+la instancia. No incluye espera por el lock. Metadata contiene modelo, dispositivo efectivo,
+duración y RTF. Un caso de prueba no demuestra el SLO p95 < 0.5.
 
-```bash
-uv run python -c "from faster_whisper.utils import download_model; download_model('small', output_dir='/srv/models/whisper-small')"
-```
+## Pruebas y benchmark reproducible
 
-Pasar `WhisperSettings(model_path=Path('/srv/models/whisper-small'))` usando `pathlib.Path`.
-Montar los pesos de solo lectura. Se requieren `model.bin`, `config.json`, `tokenizer.json`,
-`preprocessor_config.json` y `vocabulary.json` o `vocabulary.txt`. Se comprueban antes de
-construir el modelo: faster-whisper puede intentar obtener un tokenizer de Internet cuando
-falta `tokenizer.json`, incluso si se pidió carga local. Una caché incompleta produce un
-error con el comando de aprovisionamiento; no provoca esa descarga implícita.
+Las unitarias generan tonos mono/estéreo y simulan el backend, con sockets bloqueados,
+spans en memoria y comprobaciones del contador/suma Prometheus. Verifican también imports
+lazy, pesos/tokenizer ausentes, errores lazy, fallback CUDA y aislamiento de `.env`.
 
-La búsqueda en caché y el constructor reciben siempre `local_files_only=True`; la búsqueda
-no usa tokens Hugging Face locales. No se hacen llamadas a proveedores ni se descargan URLs
-`RecordingUrl` dentro del transcriptor.
-
-## CPU, Blackwell y observabilidad
-
-CPU `int8` es el camino por defecto, sin torch ni CUDA. `device="cuda"` solicita float16;
-un error de ejecución/capacidad en carga o iteración fuerza un único reintento completo en
-CPU `int8`, descarta resultados parciales y conserva CPU para futuras llamadas. El span
-registra `asr.fallback=cpu_int8`; no se registra la excepción original. La compatibilidad real
-con RTX 5060 / sm_120 no fue validada en T01; no asumir que el wheel de CTranslate2 la soporta.
-
-El span `asr.transcribe` contiene `conversation.id`, `asr.model`, `audio.duration_s`,
-`asr.device` y `asr.realtime_factor`. No contiene texto, rutas de audio/modelos, URLs ni
-excepciones de terceros. Los fallos marcan estado ERROR sin eventos con PII.
-
-RTF = (segundos de decodificación + carga + inferencia) / duración real del archivo. Para
-estéreo se mide el trabajo de ambos canales contra una sola duración, no contra el doble. La primera
-llamada incluye carga (cold); las siguientes reutilizan el modelo (warm). No incluye espera
-por el lock. Metadata guarda `asr_model`, `asr_device`, `audio_duration_s`,
-`asr_realtime_factor`. **T05: emit ASR_REALTIME_FACTOR via telemetry.metrics.** No se crea
-un segundo histograma aquí.
-
-## Pruebas y benchmark
-
-Las unitarias generan WAV estéreo de diez segundos y mono remuestreado; simulan
-`WhisperModel` y fallos lazy/GPU. Los sockets de red están bloqueados. Las trazas se capturan
-en memoria. Los tonos prueban canales y timestamps, no calidad de reconocimiento.
-
-La integración real requiere pesos `small` preinstalados y un ejecutable local `espeak-ng`
-o `espeak`, que genera dos frases sintéticas sin PII ni red. No se instala automáticamente.
-El generador `tests/fixtures/audio/generate.py` produce diez segundos de voz estéreo PCM16,
-y no sobrescribe archivos existentes.
+La integración usa la fixture pública JFK versionada en `tests/fixtures/audio/jfk.wav`.
+`PROVENANCE.md` documenta fuente, dominio público, conversión y hashes. `generate.py` crea
+localmente diez segundos de estéreo: [0,5) del discurso a la izquierda, [6,11) a la derecha,
+con silencio en la otra mitad de cada canal. Son fragmentos del mismo orador, no dos personas.
+No se requiere TTS, red ni descargas durante ninguna prueba.
 
 ```bash
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run pyright
 uv run pytest -q
-uv run pytest -m integration tests/transcription -s -rs
-uv run pytest -m integration tests/transcription --asr-model-path=/srv/models/whisper-small -s -rs
+uv lock --check
+uv sync --group ml
+uv run --group ml pytest -m 'integration and not gpu' tests/transcription -s -rs
+uv run --group ml pytest -m 'integration and gpu' tests/transcription -s -rs
 ```
 
-La integración comprueba al menos un turno por speaker y muestra RTF cold/warm CPU int8 de
-`small` con cuatro threads. Sin caché se omite explícitamente; una ruta explícita incompleta
-falla. No hay número de RTF real disponible en este entorno: faltan pesos preinstalados y
-eSpeak. No sustituirlo por el tiempo de los mocks ni afirmar que se cumple el SLO de 0.5.
+Las integraciones comprueban turnos de ambos canales y muestran RTF cold/warm, dispositivo
+solicitado/efectivo, cuatro threads y `language=en`. Sin `ml`, se omiten mediante
+`pytest.importorskip`; sin pesos preaprovisionados en `models/whisper-small`, se omiten con
+motivo explícito. `--asr-model-path=/ruta/local` permite otra ruta; si es incompleta, falla.
 
-## Dependencias para integrar fuera de este lane
+## Resultados reales (2026-10-04)
 
-El propietario debe incorporarlas con `uv add` y actualizar `uv.lock` antes de habilitar CI
-con un entorno limpio. T01 solo pudo verificarlas en un entorno temporal, sin tocar el
-manifiesto ni su política de seguridad:
+WSL2/Linux, Python 3.12.3, Ryzen 9 8940HX, RTX 5060 Laptop (sm_120, 8151 MiB), driver 592.82.
+Backend faster-whisper 1.2.1 / CTranslate2 4.8.2, cuatro threads CTranslate2, idioma `en` y
+fixture JFK estéreo de diez segundos. Una medición cold/warm por ejecución independiente:
 
-| Paquete verificado | Grupo | Justificación |
+| Solicitud | Dispositivo efectivo | Cold RTF | Warm RTF |
+| --- | --- | --- | --- |
+| CPU int8 | CPU | 0.339061 | 0.200608 |
+| CUDA float16, entorno sin ajuste de loader | CPU (fallback) | 0.363580 | 0.192315 |
+| CUDA float16, rutas cuBLAS/cuDNN explícitas | CUDA | 0.839915 | 0.036978 |
+
+En el primer intento CUDA, CTranslate2 detectó una GPU, anunció float16 y cargó el modelo,
+pero al iterar segmentos lanzó exactamente:
+`RuntimeError: Library libcublas.so.12 is not found or cannot be loaded`.
+El fallback funcionó; sus tiempos no son rendimiento GPU. Las bibliotecas ya estaban
+instaladas por torch en `ml`, pero no estaban en la ruta del loader de CTranslate2.
+No fue un fallo demostrado de kernels sm_120.
+
+El segundo intento pasó en CUDA con este ajuste limitado al proceso, sin instalar paquetes
+adicionales ni modificar configuración global (rutas para el entorno Python 3.12 del repo):
+
+```bash
+LD_LIBRARY_PATH="$PWD/.venv/lib/python3.12/site-packages/nvidia/cublas/lib:$PWD/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+uv run --group ml pytest -m 'integration and gpu' tests/transcription --asr-model-path=models/whisper-small -s -rs
+```
+
+Ambos canales produjeron turnos en los tres casos. Cold es la primera inferencia de una
+instancia, incluyendo carga del modelo y VAD; el módulo faster-whisper ya fue importado por
+`pytest.importorskip`. Warm reutiliza la instancia. No es una medición p95 ni una garantía
+universal de compatibilidad GPU; solo se verificó esta combinación de hardware y versiones.
+
+## Dependencias justificadas
+
+| Paquete | Grupo | Motivo |
 | --- | --- | --- |
-| `faster-whisper==1.2.1` | base | ASR CTranslate2 en CPU, sin dependencia de torch. |
-| `av==15.1.0` | base | Decodificar/remuestrear con canales separados y allowlist, sin ffmpeg externo. |
-| `numpy==2.3.3` | base | Representar y concatenar PCM planar para inferencia. |
-| `twilio==9.8.0` | base | Algoritmo oficial de validación de firmas webhook, sin llamadas de red. |
-| `opentelemetry-api==1.37.0` | base/T05 | Emitir spans sin configurar exporters. |
-| `opentelemetry-sdk==1.37.0` | dev/T05 | Verificar spans con exporter en memoria, sin red. |
+| faster-whisper | ml | Backend real CTranslate2, opcional y lazy; unitarias no lo necesitan. |
+| av | base | Decodificación/remuestreo real de audio con allowlist, también en unitarias sin ml. |
+| numpy | base | PCM planar y separación de canales, usados directamente sin ml. |
+| twilio | base | Validador oficial de firmas webhook, usado sin servicios externos. |
 
-No se añadieron torch/CUDA ni pyannote; cualquier dependencia exclusivamente GPU futura
-corresponde a `ml`. Coordinar versiones OTel con T05. La decisión CPU/offline y su ADR
-formal también requieren al propietario, porque `docs/adr/` no está permitido para T01.
+CTranslate2 y ONNX Runtime son transitivas de faster-whisper. No se necesita soundfile.
+Se conservan las dependencias OTel API/SDK de main sin downgrade, y no se añaden torch/CUDA
+fuera del grupo `ml` existente. Las dependencias y el lock se gestionan con `uv add`/`uv lock`.

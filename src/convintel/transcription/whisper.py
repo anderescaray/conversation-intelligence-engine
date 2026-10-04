@@ -1,18 +1,19 @@
 import asyncio
+import importlib
 import math
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from itertools import chain
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
-from typing import Literal
+from types import ModuleType
+from typing import Literal, Protocol, cast
 from urllib.parse import unquote, urlsplit
 
 import av
 import numpy as np
 from av.error import FFmpegError
-from faster_whisper import WhisperModel
-from faster_whisper.utils import download_model
 from numpy.typing import NDArray
 from opentelemetry.trace import Span
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +21,33 @@ from pydantic import BaseModel, ConfigDict, Field
 from convintel.contracts import Channel, Conversation, Speaker, Turn
 from convintel.errors import TranscriptionError
 from convintel.ingest._tracing import private_span
+from convintel.telemetry.metrics import ASR_REALTIME_FACTOR
+
+
+class _Segment(Protocol):
+    start: float
+    end: float
+    text: str
+    avg_logprob: float
+
+
+class _Info(Protocol):
+    language: str
+
+
+class _WhisperModel(Protocol):
+    def transcribe(
+        self, audio: NDArray[np.float32], *, language: str | None, vad_filter: bool
+    ) -> tuple[Iterable[_Segment], _Info]: ...
+
+
+def _import_backend(name: str) -> ModuleType:
+    try:
+        return importlib.import_module(name)
+    except ImportError:
+        raise TranscriptionError(
+            "The ASR backend is unavailable. Install it with `uv sync --group ml`."
+        ) from None
 
 
 class WhisperSettings(BaseModel):
@@ -37,7 +65,7 @@ class WhisperSettings(BaseModel):
 class WhisperTranscriber:
     def __init__(self, settings: WhisperSettings | None = None) -> None:
         self.settings = settings or WhisperSettings()
-        self._model: WhisperModel | None = None
+        self._model: _WhisperModel | None = None
         self._device = self.settings.device
         self._lock = Lock()
 
@@ -47,22 +75,24 @@ class WhisperTranscriber:
     def _resolve_model(self) -> Path:
         message = (
             "ASR weights are missing or incomplete. Download them explicitly before starting: "
-            'uv run python -c "from faster_whisper.utils import download_model; '
-            f"download_model('{self.settings.model_size}')\". "
-            "See convintel/transcription/README.md for local-path setup."
+            'uv run --group ml python -c "from faster_whisper.utils import download_model; '
+            f"download_model('{self.settings.model_size}', "
+            f"output_dir='models/whisper-{self.settings.model_size}', use_auth_token=False)\". "
+            "Pass that directory as WhisperSettings.model_path; "
+            "see convintel/transcription/README.md."
         )
         try:
             path = self.settings.model_path
             if path is None:
                 path = Path(
-                    download_model(
+                    _import_backend("faster_whisper.utils").download_model(
                         self.settings.model_size,
                         local_files_only=True,
                         cache_dir=str(self.settings.cache_dir) if self.settings.cache_dir else None,
                         use_auth_token=False,
                     )
                 )
-            required = ("model.bin", "config.json", "tokenizer.json", "preprocessor_config.json")
+            required = ("model.bin", "config.json", "tokenizer.json")
             if not all((path / name).is_file() for name in required) or not any(
                 (path / name).is_file() for name in ("vocabulary.json", "vocabulary.txt")
             ):
@@ -71,14 +101,18 @@ class WhisperTranscriber:
         except (OSError, ValueError):
             raise TranscriptionError(message) from None
 
-    def _load_model(self) -> WhisperModel:
+    def _load_model(self) -> _WhisperModel:
         if self._model is None:
-            self._model = WhisperModel(
-                str(self._resolve_model()),
-                device=self._device,
-                compute_type="int8" if self._device == "cpu" else "float16",
-                cpu_threads=self.settings.cpu_threads,
-                local_files_only=True,
+            path = self._resolve_model()
+            self._model = cast(
+                _WhisperModel,
+                _import_backend("faster_whisper").WhisperModel(
+                    str(path),
+                    device=self._device,
+                    compute_type="int8" if self._device == "cpu" else "float16",
+                    cpu_threads=self.settings.cpu_threads,
+                    local_files_only=True,
+                ),
             )
         return self._model
 
@@ -140,6 +174,7 @@ class WhisperTranscriber:
             rtf = (perf_counter() - start) / duration
             span.set_attribute("asr.realtime_factor", rtf)
             span.set_attribute("asr.device", self._device)
+            ASR_REALTIME_FACTOR.labels(model=self.settings.model_size).observe(rtf)
             return Conversation(
                 id=conversation_id,
                 channel=Channel.VOICE,
