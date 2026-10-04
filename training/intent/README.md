@@ -56,7 +56,7 @@ Config: [`config.yaml`](config.yaml) (validated by `TrainConfig`, unknown keys r
 | seed | 42 for python, numpy, torch, shuffling and the split | reproducible to within GPU nondeterminism |
 
 Plain PyTorch loop (no HF `Trainer`): no `accelerate` dependency, and explicit control over
-which split each phase sees. Expected on an RTX 5060 Laptop (8 GB): a few minutes, ~2 GB VRAM.
+which split each phase sees. On an RTX 5060 Laptop (8 GB) the 5 epochs take ~85 s.
 
 Outputs go to `training/intent/outputs/<UTC timestamp>/` (gitignored) and to MLflow:
 
@@ -100,4 +100,25 @@ adds `latency_<device>_<kind>_<stat>` metrics to the training run of the resolve
 
 ## Results
 
-_Filled in after the first real training run (see the PR)._
+First run: `intent-classifier` v1 (`@champion`), MLflow run `11387b8681024f68a9a0b2df15377965`,
+RTX 5060 Laptop, bf16, best epoch 5 of 5, 83 s of training.
+
+| Metric | Validation (1 002) | Test (3 076) |
+|---|---|---|
+| Accuracy | | **0.926** |
+| Macro-F1 | 0.920 (best epoch) | **0.926** (target ≥ 0.90) |
+| ECE, T = 1 → T = 0.965 | 0.0215 → 0.0213 | 0.0195 → 0.0174 |
+| NLL, T = 1 → T = 0.965 | 0.3378 → 0.3370 | |
+| τ = 0.861: coverage / covered accuracy | 85.0 % / 97.1 % | **87.5 % / 97.7 %** |
+
+The fine-tuned model is already close to calibrated (fitted T ≈ 0.97, slightly *under*-confident),
+so temperature scaling changes little here; it is kept because it is free, and the next model
+or dataset may not be so well behaved. With τ = 0.861, about 1 conversation in 8 would go to the
+LLM verifier (per utterance; see the selection-bias note above).
+
+Latency (500 timed samples after 20 warm-up, batch 1, 16 torch CPU threads):
+
+| | CPU p50 | CPU p95 | GPU p50 | GPU p95 |
+|---|---|---|---|---|
+| One utterance | 14.9 ms | 19.8 ms | 3.0 ms | 4.7 ms |
+| `IntentOperator.run`, 3 customer turns | 23.1 ms | 34.4 ms | 5.4 ms | 9.3 ms |
