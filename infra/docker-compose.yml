@@ -3,7 +3,7 @@
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.11-alpine
     environment:
       POSTGRES_USER: convintel
       POSTGRES_PASSWORD: convintel

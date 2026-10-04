@@ -114,7 +114,7 @@
     {
       "id": 6,
       "type": "stat",
-      "title": "LLM cost / conversation (1h)",
+      "title": "LLM cost / processed conversation (1h)",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
       "fieldConfig": {
@@ -125,7 +125,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(convintel_llm_cost_usd_total[1h])) / sum(increase(convintel_requests_total[1h]))"
+          "expr": "sum(increase(convintel_llm_cost_usd_total[1h])) / sum(increase(convintel_pipeline_latency_seconds_count[1h]))"
         }
       ]
     },

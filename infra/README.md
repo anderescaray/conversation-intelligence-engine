@@ -52,6 +52,29 @@ Then:
 
 Ctrl+C stops the demo; the stack keeps running.
 
+## Hiding LLM inputs/outputs in traces
+
+OpenInference captures LLM request/response payloads on spans by default — that
+is what makes local debugging in Phoenix useful. It is safe here by design:
+text only reaches an LLM call **after** the PII redaction boundary (Presidio
+runs before the pipeline), so spans never carry raw PII.
+
+If you ever need to hide payloads anyway (e.g. demoing Phoenix externally), set
+these env vars on the app process before `convintel.telemetry.setup()` runs:
+
+```bash
+OPENINFERENCE_HIDE_INPUTS=true          # drop input.value / input.mime_type
+OPENINFERENCE_HIDE_OUTPUTS=true         # drop output.value / output.mime_type
+OPENINFERENCE_HIDE_INPUT_MESSAGES=true  # drop llm.input_messages
+OPENINFERENCE_HIDE_OUTPUT_MESSAGES=true # drop llm.output_messages
+OPENINFERENCE_HIDE_INPUT_TEXT=true      # keep structure, drop message text
+OPENINFERENCE_HIDE_OUTPUT_TEXT=true
+```
+
+The full list lives in `openinference.instrumentation.config`. They are plain
+environment variables, not `Settings` fields — wiring them into
+`convintel.config` is a human-owned follow-up (config is frozen for lanes).
+
 ## Data persistence
 
 Named volumes (`postgres-data`, `phoenix-data`, `grafana-data`,
