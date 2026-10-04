@@ -55,3 +55,23 @@ def test_no_extra_pipeline_metrics_are_declared() -> None:
 def test_llm_metrics_are_not_declared_here() -> None:
     # Owned by convintel.llm.metrics (T04); declaring them here would collide at import.
     assert not any("llm" in name.lower() for name in vars(metrics))
+
+
+def test_llm_metrics_module_coexists_without_duplicate_timeseries() -> None:
+    """Both metric modules share the default REGISTRY; importing them in the same
+    process must not raise prometheus_client's "Duplicated timeseries" error."""
+    import convintel.llm.metrics as llm_metrics
+
+    llm_metrics.LLM_TOKENS.labels(model="probe", direction="in").inc()
+    metrics.REQUESTS_TOTAL.labels(route="/probe", status="200").inc()
+
+    assert (
+        REGISTRY.get_sample_value(
+            "convintel_llm_tokens_total", {"model": "probe", "direction": "in"}
+        )
+        is not None
+    )
+    assert (
+        REGISTRY.get_sample_value("convintel_requests_total", {"route": "/probe", "status": "200"})
+        is not None
+    )
