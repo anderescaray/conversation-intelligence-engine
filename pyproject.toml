@@ -37,8 +37,12 @@ dev = [
 # Local model work only (torch, spaCy NER model); never installed by default or in CI.
 # See docs/adr/0005.
 ml = [
+    "datasets>=4",
     "en-core-web-lg",
     "faster-whisper>=1.2.1,<2",
+    "huggingface-hub>=1.0",
+    "matplotlib>=3.9",
+    "mlflow>=3.16,<4",
     "torch>=2.7",
     "transformers>=5.18.0",
 ]
@@ -70,7 +74,7 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
-include = ["src", "tests", "scripts"]
+include = ["src", "tests", "scripts", "training"]
 strict = ["src/convintel/contracts"]
 
 [tool.pytest.ini_options]

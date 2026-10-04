@@ -1,0 +1,21 @@
+# Fine-tuning config for the intent classifier (T03). Every key maps to TrainConfig in config.py.
+base_model: distilbert-base-uncased
+max_length: 128         # longest Banking77 train utterance is 98 tokens; padding is per batch
+batch_size: 32
+eval_batch_size: 256
+learning_rate: 5.0e-5
+weight_decay: 0.01
+warmup_ratio: 0.1
+epochs: 5
+grad_clip: 1.0
+bf16: true              # autocast on CUDA only; CPU runs in fp32
+seed: 42
+val_fraction: 0.1       # stratified slice of the official train split
+
+ece_bins: 15
+target_covered_accuracy: 0.97
+min_covered_cases: 50        # τ must serve at least this many validation cases
+promote_min_macro_f1: 0.90   # champion alias only if test macro-F1 reaches the T03 target
+
+experiment: intent-classifier
+registered_model: intent-classifier
