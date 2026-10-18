@@ -16,7 +16,7 @@ from convintel.llm import LLMClient, load_prompt
 from convintel.llm.pricing import compute_cost
 from convintel.telemetry import setup, traced
 
-from .judge import configured_client, judge_sample, reviewable
+from .judge import JUDGE_PROMPT_VERSION, configured_client, judge_sample, reviewable
 from .pii import insert_pii
 from .review import decision
 from .scenarios import scenarios
@@ -179,7 +179,7 @@ def report(samples: list[Sample], attempts: list[Attempt], target: int) -> Repor
         rejection_categories=dict(categories),
         rejection_rates={key: count / len(attempts) for key, count in categories.items()},
         judge_failed_labels=dict(
-            Counter(label for a in rejected if a.judge for label in a.judge.verdict.failed_labels)
+            Counter(label for a in rejected if a.judge for label in a.judge.failed_labels)
         ),
         sample_elapsed_s=sample_times,
         timed_out_ids=sorted({a.id for a in rejected if a.category == "timeout"}),
@@ -237,7 +237,7 @@ async def generate_run(
     judge_client = judge_client or client
     prompt, judge_prompt = await asyncio.gather(
         asyncio.to_thread(load_prompt, "synthetic", 2),
-        asyncio.to_thread(load_prompt, "synthetic_judge", 1),
+        asyncio.to_thread(load_prompt, "synthetic_judge", JUDGE_PROMPT_VERSION),
     )
     run = RunSpec(
         seed=seed,
@@ -395,7 +395,7 @@ def main() -> int:
                 destination,
                 configured_client(settings, "synthetic", 2),
                 settings,
-                judge_client=configured_client(settings, "synthetic_judge", 1),
+                judge_client=configured_client(settings, "synthetic_judge", JUDGE_PROMPT_VERSION),
                 seed=args.seed,
                 n=args.n,
                 model_revision=args.model_revision,

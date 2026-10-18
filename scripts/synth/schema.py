@@ -156,6 +156,8 @@ class LabelCheck(Record):
 
 
 class JudgeVerdict(Record):
+    """Judge v1 output, kept only so the archived pilot-v2 attempts stay readable."""
+
     intent: LabelCheck
     resolved: LabelCheck
     escalation_requested: LabelCheck
@@ -171,7 +173,7 @@ class JudgeVerdict(Record):
         return not self.failed_labels
 
 
-class JudgeRecord(Record):
+class LegacyJudgeRecord(Record):
     model_id: str
     model_revision: str
     prompt_version: str
@@ -184,6 +186,95 @@ class JudgeRecord(Record):
     cost_usd: float | None
     latency_ms: float = Field(ge=0)
     verdict: JudgeVerdict
+
+    @property
+    def failed_labels(self) -> tuple[str, ...]:
+        return self.verdict.failed_labels
+
+
+Label = Literal["intent", "resolved", "escalation_requested", "start_sentiment", "end_sentiment"]
+LABELS: tuple[Label, ...] = (
+    "intent",
+    "resolved",
+    "escalation_requested",
+    "start_sentiment",
+    "end_sentiment",
+)
+Evidence = tuple[Annotated[int, Field(ge=0, lt=10)], ...]
+
+
+class ObservedIntent(Record):
+    value: str = Field(min_length=1)
+    evidence_turns: Evidence = Field(min_length=1, max_length=10)
+
+
+class ObservedFlag(Record):
+    value: StrictBool
+    evidence_turns: Evidence = Field(min_length=1, max_length=10)
+
+
+class ObservedSentiment(Record):
+    value: Sentiment
+    evidence_turns: Evidence = Field(min_length=1, max_length=10)
+
+
+class JudgeObservation(Record):
+    """What the blind judge reads in the dialogue; the targets are compared in code."""
+
+    intent: ObservedIntent
+    resolved: ObservedFlag
+    escalation_requested: ObservedFlag
+    start_sentiment: ObservedSentiment
+    end_sentiment: ObservedSentiment
+
+
+class LabelTargets(Record):
+    intent: str
+    resolved: StrictBool
+    escalation_requested: StrictBool
+    start_sentiment: Sentiment
+    end_sentiment: Sentiment
+
+
+def targets_of(scenario: Scenario) -> LabelTargets:
+    return LabelTargets(
+        intent=scenario.intent,
+        resolved=scenario.resolved,
+        escalation_requested=scenario.escalation_requested,
+        start_sentiment=scenario.start_sentiment,
+        end_sentiment=scenario.end_sentiment,
+    )
+
+
+def compare(observation: JudgeObservation, targets: LabelTargets) -> tuple[Label, ...]:
+    return tuple(
+        label for label in LABELS if getattr(observation, label).value != getattr(targets, label)
+    )
+
+
+class JudgeRecord(Record):
+    model_id: str
+    model_revision: str
+    prompt_version: str
+    prompt_sha256: str
+    input_sha256: str
+    temperature: float
+    reasoning: bool | None = None
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    cost_usd: float | None
+    latency_ms: float = Field(ge=0)
+    observation: JudgeObservation
+    mismatched_labels: tuple[Label, ...]
+    evidence_errors: tuple[str, ...] = ()
+
+    @property
+    def failed_labels(self) -> tuple[str, ...]:
+        return self.mismatched_labels
+
+    @property
+    def passed(self) -> bool:
+        return not self.mismatched_labels and not self.evidence_errors
 
 
 class LegacyAnnotation(Record):
@@ -261,7 +352,7 @@ class Attempt(Record):
     reason: str
     category: Literal["accepted", "validator", "judge", "timeout", "llm"] = "validator"
     phase: Literal["generation", "validation", "judge"] = "generation"
-    judge: JudgeRecord | None = None
+    judge: JudgeRecord | LegacyJudgeRecord | None = None
     elapsed_s: float
     input_tokens: int
     output_tokens: int

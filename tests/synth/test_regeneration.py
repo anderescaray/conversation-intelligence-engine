@@ -11,7 +11,7 @@ from convintel.llm.testing import FakeStructuredChatModel, tool_answer
 from scripts.synth.generate import generate_run
 from scripts.synth.review import decision
 from scripts.synth.scenarios import scenarios
-from scripts.synth.schema import Draft, JudgeVerdict, ReviewEvent, Sample
+from scripts.synth.schema import Draft, JudgeObservation, ReviewEvent, Sample
 from scripts.synth.storage import append_jsonl, digest, load_samples, read_jsonl
 
 
@@ -21,11 +21,11 @@ async def test_only_rejected_samples_can_be_explicitly_regenerated(
     settings: Settings,
     draft_factory: Callable,
     custom_ledger: bool,
-    judge_verdict: Callable,
+    judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
     draft = draft_factory(scenario).model_dump()
-    answer = tool_answer(JudgeVerdict, judge_verdict(scenario).model_dump())
+    answer = tool_answer(JudgeObservation, judge_observation(scenario).model_dump())
     model = FakeStructuredChatModel(
         responses=[tool_answer(Draft, draft), answer, tool_answer(Draft, draft), answer]
     )

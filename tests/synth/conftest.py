@@ -17,7 +17,7 @@ from convintel.config import Settings, get_settings
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 if TYPE_CHECKING:
-    from scripts.synth.schema import Draft, JudgeVerdict, Sample, Scenario
+    from scripts.synth.schema import Draft, JudgeObservation, Sample, Scenario
 
 
 @pytest.fixture(autouse=True)
@@ -81,17 +81,25 @@ def draft_factory() -> Callable[[Scenario], Draft]:
 
 
 @pytest.fixture
-def judge_verdict() -> Callable[[Scenario], JudgeVerdict]:
-    from scripts.synth.schema import JudgeVerdict, LabelCheck
+def judge_observation() -> Callable[[Scenario], JudgeObservation]:
+    from scripts.synth.schema import (
+        JudgeObservation,
+        ObservedFlag,
+        ObservedIntent,
+        ObservedSentiment,
+    )
 
-    def factory(scenario: Scenario) -> JudgeVerdict:
-        return JudgeVerdict(
-            intent=LabelCheck(matches=True, evidence_turns=(0,)),
-            resolved=LabelCheck(matches=True, evidence_turns=(3,)),
-            escalation_requested=LabelCheck(matches=True, evidence_turns=(0,)),
-            start_sentiment=LabelCheck(matches=True, evidence_turns=(0,)),
-            end_sentiment=LabelCheck(
-                matches=True, evidence_turns=(2 * scenario.customer_turns - 2,)
+    def factory(scenario: Scenario) -> JudgeObservation:
+        last_customer = 2 * scenario.customer_turns - 2
+        return JudgeObservation(
+            intent=ObservedIntent(value=scenario.intent, evidence_turns=(0,)),
+            resolved=ObservedFlag(value=scenario.resolved, evidence_turns=(last_customer + 1,)),
+            escalation_requested=ObservedFlag(
+                value=scenario.escalation_requested, evidence_turns=(0,)
+            ),
+            start_sentiment=ObservedSentiment(value=scenario.start_sentiment, evidence_turns=(0,)),
+            end_sentiment=ObservedSentiment(
+                value=scenario.end_sentiment, evidence_turns=(last_customer,)
             ),
         )
 
@@ -99,17 +107,19 @@ def judge_verdict() -> Callable[[Scenario], JudgeVerdict]:
 
 
 @pytest.fixture
-def with_judge(judge_verdict: Callable[[Scenario], JudgeVerdict]) -> Callable[[Sample], Sample]:
+def with_judge(
+    judge_observation: Callable[[Scenario], JudgeObservation],
+) -> Callable[[Sample], Sample]:
     from scripts.synth.judge import judge_input
     from scripts.synth.schema import Annotation, JudgeRecord
     from scripts.synth.storage import digest
 
     def attach(sample: Sample) -> Sample:
         assert isinstance(sample.labels, Annotation)
-        verdict = JudgeRecord(
+        record = JudgeRecord(
             model_id="ollama:qwen3:8b",
             model_revision="test",
-            prompt_version="synthetic_judge/v1",
+            prompt_version="synthetic_judge/v2",
             prompt_sha256="c" * 64,
             input_sha256=digest(judge_input(sample)),
             temperature=0,
@@ -117,10 +127,11 @@ def with_judge(judge_verdict: Callable[[Scenario], JudgeVerdict]) -> Callable[[S
             output_tokens=20,
             cost_usd=0,
             latency_ms=1,
-            verdict=judge_verdict(sample.labels.scenario),
+            observation=judge_observation(sample.labels.scenario),
+            mismatched_labels=(),
         )
         return sample.model_copy(
-            update={"labels": sample.labels.model_copy(update={"judge": verdict})}
+            update={"labels": sample.labels.model_copy(update={"judge": record})}
         )
 
     return attach

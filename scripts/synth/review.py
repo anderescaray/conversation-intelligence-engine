@@ -10,7 +10,7 @@ from convintel.telemetry import traced
 
 from .judge import reviewable
 from .scenarios import INTENTS
-from .schema import VERSION, Annotation, Record, ReviewEvent, Sample
+from .schema import LABELS, VERSION, Annotation, Record, ReviewEvent, Sample, targets_of
 from .storage import (
     append_jsonl,
     digest,
@@ -59,9 +59,15 @@ def show_sample(sample: Sample) -> str:
         lines.append(f"intent_description={target.intent_description}")
         if sample.labels.judge is not None:
             judge = sample.labels.judge
-            lines.append(
-                f"Judge {judge.model_id}, {judge.prompt_version}: {judge.verdict.model_dump_json()}"
-            )
+            targets = targets_of(target)
+            lines.append(f"Blind judge {judge.model_id}, {judge.prompt_version}:")
+            for label in LABELS:
+                seen = getattr(judge.observation, label)
+                status = "MISMATCH" if label in judge.mismatched_labels else "ok"
+                lines.append(
+                    f"  {label}: target={getattr(targets, label)} observed={seen.value} "
+                    f"evidence={list(seen.evidence_turns)} {status}"
+                )
     else:
         lines.append("ARCHIVED: no judge verdict; not eligible for human review or golden")
     for turn in sample.conversation.turns:

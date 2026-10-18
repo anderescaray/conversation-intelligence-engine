@@ -13,7 +13,16 @@ from convintel.llm.testing import FakeStructuredChatModel, no_sleep, tool_answer
 from scripts.synth.generate import generate_run
 from scripts.synth.judge import reviewable
 from scripts.synth.scenarios import scenarios
-from scripts.synth.schema import VERSION, Annotation, Attempt, Draft, JudgeVerdict, LabelCheck
+from scripts.synth.schema import (
+    VERSION,
+    Annotation,
+    Attempt,
+    Draft,
+    JudgeObservation,
+    LegacyJudgeRecord,
+    ObservedFlag,
+    ObservedIntent,
+)
 from scripts.synth.storage import load_samples, read_jsonl
 
 
@@ -21,14 +30,14 @@ async def test_structured_generation_and_safe_telemetry(
     tmp_path: Path,
     settings: Settings,
     draft_factory: Callable,
-    judge_verdict: Callable,
+    judge_observation: Callable,
     spans: InMemorySpanExporter,
 ) -> None:
     scenario = scenarios(42)[0]
     model = FakeStructuredChatModel(
         responses=[
             tool_answer(Draft, draft_factory(scenario).model_dump()),
-            tool_answer(JudgeVerdict, judge_verdict(scenario).model_dump()),
+            tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ]
     )
     client = LLMClient(settings, chat_model=model, sleep=no_sleep)
@@ -41,7 +50,7 @@ async def test_structured_generation_and_safe_telemetry(
     assert sample.labels.scenario == scenario
     assert sample.labels.provenance.prompt_version == "synthetic/v2"
     assert isinstance(sample.labels, Annotation) and sample.labels.judge is not None
-    assert sample.labels.judge.prompt_version == "synthetic_judge/v1"
+    assert sample.labels.judge.prompt_version == "synthetic_judge/v2"
     assert reviewable(sample)
     assert read_jsonl(directory / "conversations.jsonl", Conversation) == [sample.conversation]
     assert scenario.model_dump_json() in str(model.calls[0][1].content)
@@ -71,7 +80,7 @@ async def test_validator_rejects_preserve_labels_and_never_call_judge(
     tmp_path: Path,
     settings: Settings,
     draft_factory: Callable,
-    judge_verdict: Callable,
+    judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
     valid = draft_factory(scenario).model_dump()
@@ -81,7 +90,7 @@ async def test_validator_rejects_preserve_labels_and_never_call_judge(
         responses=[
             tool_answer(Draft, bad),
             tool_answer(Draft, valid),
-            tool_answer(JudgeVerdict, judge_verdict(scenario).model_dump()),
+            tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ]
     )
     result = await generate_run(
@@ -105,19 +114,19 @@ async def test_judge_rejects_are_recorded_but_never_published(
     tmp_path: Path,
     settings: Settings,
     draft_factory: Callable,
-    judge_verdict: Callable,
+    judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
-    verdict = judge_verdict(scenario).model_copy(
+    observation = judge_observation(scenario).model_copy(
         update={
-            "intent": LabelCheck(matches=False, evidence_turns=(0,)),
-            "resolved": LabelCheck(matches=False, evidence_turns=(3,)),
+            "intent": ObservedIntent(value="exchange_rate", evidence_turns=(0,)),
+            "resolved": ObservedFlag(value=not scenario.resolved, evidence_turns=(3,)),
         }
     )
     model = FakeStructuredChatModel(
         responses=[
             tool_answer(Draft, draft_factory(scenario).model_dump()),
-            tool_answer(JudgeVerdict, verdict.model_dump()),
+            tool_answer(JudgeObservation, observation.model_dump()),
         ]
     )
     directory = tmp_path / "pilot"
@@ -135,7 +144,10 @@ async def test_judge_rejects_are_recorded_but_never_published(
     assert result.judge_failed_labels == {"intent": 1, "resolved": 1}
     assert load_samples(directory) == []
     attempt = read_jsonl(directory / "attempts.jsonl", Attempt)[0]
-    assert attempt.judge is not None and attempt.judge.verdict == verdict
+    assert attempt.judge is not None
+    assert not isinstance(attempt.judge, LegacyJudgeRecord)
+    assert attempt.judge.observation == observation
+    assert attempt.judge.mismatched_labels == ("intent", "resolved")
     assert attempt.judge.model_id == "ollama:qwen3:8b"
     assert attempt.phase == "judge"
 
@@ -162,7 +174,7 @@ async def test_scenario_length_is_enforced_in_structured_schema(
     tmp_path: Path,
     settings: Settings,
     draft_factory: Callable,
-    judge_verdict: Callable,
+    judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
     valid = draft_factory(scenario).model_dump()
@@ -171,7 +183,7 @@ async def test_scenario_length_is_enforced_in_structured_schema(
         responses=[
             tool_answer(Draft, short),
             tool_answer(Draft, valid),
-            tool_answer(JudgeVerdict, judge_verdict(scenario).model_dump()),
+            tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ]
     )
     result = await generate_run(

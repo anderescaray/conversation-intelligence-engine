@@ -14,7 +14,7 @@ from convintel.llm import LLMClient
 from convintel.llm.testing import FakeStructuredChatModel, tool_answer
 from scripts.synth.generate import generate_run
 from scripts.synth.scenarios import scenarios
-from scripts.synth.schema import Attempt, Draft, JudgeVerdict
+from scripts.synth.schema import Attempt, Draft, JudgeObservation
 from scripts.synth.storage import load_samples, read_jsonl
 
 
@@ -36,14 +36,14 @@ async def test_judge_timeout_skips_sample_and_resume_does_not_restart_budget(
     tmp_path: Path,
     settings: Settings,
     draft_factory: Callable,
-    judge_verdict: Callable,
+    judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
     model = SlowFake(
         delays=[0, 1],
         responses=[
             tool_answer(Draft, draft_factory(scenario).model_dump()),
-            tool_answer(JudgeVerdict, judge_verdict(scenario).model_dump()),
+            tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ],
     )
     client = LLMClient(settings, chat_model=model)
@@ -115,14 +115,14 @@ async def test_timeout_continues_with_next_sample(
     tmp_path: Path,
     settings: Settings,
     draft_factory: Callable,
-    judge_verdict: Callable,
+    judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[1]
     model = SlowFake(
         delays=[1, 0, 0],
         responses=[
             tool_answer(Draft, draft_factory(scenario).model_dump()),
-            tool_answer(JudgeVerdict, judge_verdict(scenario).model_dump()),
+            tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ],
     )
     result = await generate_run(
