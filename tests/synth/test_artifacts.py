@@ -1,7 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from convintel.contracts import Conversation
 from scripts.synth.audio import AudioManifest
+from scripts.synth.judge import reviewable
 from scripts.synth.pii import values_for
 from scripts.synth.schema import Attempt, LegacyAnnotation, Report, RunSpec
 from scripts.synth.storage import file_hash, load_samples, read_jsonl
@@ -54,3 +57,29 @@ def test_failed_v2_pilot_is_preserved_without_inventing_candidates() -> None:
     assert load_samples(directory) == []
     assert read_jsonl(directory / "conversations.jsonl", Conversation) == []
     assert (directory / "labels.jsonl").read_text() == ""
+
+
+@pytest.mark.parametrize(
+    ("name", "generator", "admitted"),
+    [("pilot-v3-haiku", "anthropic:claude-haiku-4-5", 8), ("pilot-v3-qwen", "ollama:qwen3:8b", 4)],
+)
+def test_v3_pilots_share_one_judge_and_publish_only_judge_passed_candidates(
+    name: str, generator: str, admitted: int
+) -> None:
+    directory = ROOT / "data/synthetic/candidates" / name
+    run = RunSpec.model_validate_json((directory / "run.json").read_text())
+    report = Report.model_validate_json((directory / "report.json").read_text())
+    samples = load_samples(directory)
+    assert run.generator_version == "3.0.0" and run.seed == 42
+    assert (report.model_id, report.judge_model_id) == (generator, "anthropic:claude-haiku-4-5")
+    assert report.candidates == len(samples) == admitted and report.human_approved == 0
+    assert read_jsonl(directory / "conversations.jsonl", Conversation) == [
+        sample.conversation for sample in samples
+    ]
+    for index, sample in enumerate(samples):
+        assert reviewable(sample)
+        validate_sample(sample)
+        ensure_unique(sample, samples[:index])
+    attempts = read_jsonl(directory / "attempts.jsonl", Attempt)
+    assert len(attempts) == report.attempts
+    assert not {"pii_placement", "placeholder_inventory"} & set(report.rejection_reasons)

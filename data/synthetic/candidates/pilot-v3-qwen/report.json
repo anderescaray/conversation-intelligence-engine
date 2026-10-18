@@ -1,0 +1,128 @@
+{
+  "model_id": "ollama:qwen3:8b",
+  "judge_model_id": "anthropic:claude-haiku-4-5",
+  "target": 10,
+  "candidates": 4,
+  "human_approved": 0,
+  "attempts": 26,
+  "rejects": 22,
+  "reject_rate": 0.8461538461538461,
+  "elapsed_s": 201.13254088300073,
+  "mean_attempt_s": 7.73586695703849,
+  "mean_accepted_attempt_s": 8.996142687499741,
+  "input_tokens": 106000,
+  "output_tokens": 10592,
+  "cost_usd": 0.096017,
+  "by_channel": {
+    "voice": 1,
+    "chat": 3
+  },
+  "by_intent": {
+    "terminate_account": 1,
+    "cancel_transfer": 1,
+    "fiat_currency_support": 1,
+    "pin_blocked": 1
+  },
+  "by_sentiment": {
+    "neutral->positive": 1,
+    "negative->negative": 2,
+    "negative->neutral": 1
+  },
+  "by_resolved": {
+    "true": 2,
+    "false": 2
+  },
+  "by_escalation": {
+    "false": 4
+  },
+  "by_pii": {
+    "PHONE_NUMBER": 4,
+    "EMAIL_ADDRESS": 3,
+    "CREDIT_CARD": 1,
+    "IBAN_CODE": 1
+  },
+  "rejection_reasons": {
+    "label_mismatch": 14,
+    "escalation_evidence": 6,
+    "skeleton_mismatch": 2
+  },
+  "rejection_categories": {
+    "judge": 14,
+    "validator": 8
+  },
+  "rejection_rates": {
+    "judge": 0.5384615384615384,
+    "validator": 0.3076923076923077
+  },
+  "judge_failed_labels": {
+    "resolved": 7,
+    "end_sentiment": 2,
+    "intent": 5,
+    "start_sentiment": 3
+  },
+  "sample_elapsed_s": {
+    "synth-v2-42-000": 24.472346587000175,
+    "synth-v2-42-001": 14.772718162000274,
+    "synth-v2-42-002": 15.0653534639996,
+    "synth-v2-42-003": 20.775387146000867,
+    "synth-v2-42-004": 21.572194387999843,
+    "synth-v2-42-005": 26.022624327000813,
+    "synth-v2-42-006": 15.337372664000213,
+    "synth-v2-42-007": 29.244860973999494,
+    "synth-v2-42-008": 25.48245229799977,
+    "synth-v2-42-009": 8.38723087299968
+  },
+  "timed_out_ids": [],
+  "missing_indices": [
+    0,
+    1,
+    4,
+    5,
+    6,
+    8
+  ],
+  "repairs": 2,
+  "repairs_fixed": 0,
+  "phase_totals": {
+    "generation": {
+      "seconds": 155.57280949100186,
+      "input_tokens": 28963,
+      "output_tokens": 6796,
+      "cost_usd": 0.0
+    },
+    "judge": {
+      "seconds": 44.37898407999728,
+      "input_tokens": 77037,
+      "output_tokens": 3796,
+      "cost_usd": 0.096017
+    }
+  },
+  "phase_mean_per_scenario": {
+    "generation": {
+      "seconds": 15.557280949100186,
+      "input_tokens": 2896,
+      "output_tokens": 680,
+      "cost_usd": 0.0
+    },
+    "judge": {
+      "seconds": 4.437898407999728,
+      "input_tokens": 7704,
+      "output_tokens": 380,
+      "cost_usd": 0.009601700000000001
+    }
+  },
+  "phase_per_admitted": {
+    "generation": {
+      "seconds": 38.893202372750466,
+      "input_tokens": 7241,
+      "output_tokens": 1699,
+      "cost_usd": 0.0
+    },
+    "judge": {
+      "seconds": 11.09474601999932,
+      "input_tokens": 19259,
+      "output_tokens": 949,
+      "cost_usd": 0.02400425
+    }
+  }
+}

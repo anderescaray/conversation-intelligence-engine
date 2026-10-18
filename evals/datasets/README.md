@@ -16,10 +16,16 @@ T03 entrena con Banking77 real. Tampoco implementa el eval runner/CI gate de T11
 
 ## Generación label-first
 
-El generador **2.0.0 / esquema 2** utiliza `prompts/synthetic/v2.yaml` y el filtro semántico
-`prompts/synthetic_judge/v1.yaml`. El prompt v1 y los pilotos anteriores son históricos e
-inmutables. El lector conserva sus campos y hashes originales, pero no son elegibles para
-revisión ni golden porque carecen de veredicto de juez. No hay conversión implícita de etiquetas.
+El generador **3.0.0 / esquema 3** utiliza `prompts/synthetic/v3.yaml` (salida estructurada
+por turno contra un esqueleto construido por código) y el juez ciego `prompts/synthetic_judge/v2.yaml`.
+Los prompts `synthetic/v1`, `synthetic/v2`, `synthetic_judge/v1` y los pilotos v1, v1.1 y v2 son
+históricos e inmutables. El lector conserva sus campos y hashes originales, pero no son elegibles
+para revisión ni golden. No hay conversión implícita de etiquetas.
+
+**IDs de escenario.** Las muestras v3 conservan IDs `synth-v2-<seed>-<index>`. El prefijo identifica
+el **plan de escenarios v2** (reglas de muestreo de abajo), que no cambia en v3, y no la versión del
+generador; esta queda en `run.json` y en `provenance.generator_version`/`schema_version`. Mantenerlos
+permite comparar pilotos y generadores sobre exactamente los mismos escenarios.
 
 `scripts.synth.scenarios` construye todo el plan de 150 escenarios antes de invocar al LLM.
 Cada intent tiene una definición breve, escrita en código en `INTENT_DESCRIPTIONS`, almacenada
@@ -54,6 +60,19 @@ Todo acceso LLM pasa por `LLMClient.structured()`. El modelo escribe turnos, no 
 reemplaza etiquetas. Ninguno de los prompts contiene utterances de Banking77. Un fallo del
 juez provoca rechazo/regeneración con el **mismo escenario**, nunca ajuste de etiquetas.
 
+### Esqueleto por turno (v3)
+
+`schema.skeleton(scenario)` fija por código, para cada turno, `turn_index`, `speaker`, los
+placeholders exactos que debe contener (posiblemente ninguno) y pistas breves: tipo de PII,
+confirmación de últimos cuatro dígitos y sentimiento del primer/último turno del cliente. El modelo
+devuelve una lista `{turn_index, speaker, text}` de longitud exacta. `validation.skeleton_errors`
+comprueba longitud, índice, speaker y que cada turno contenga **exactamente** sus placeholders, una
+vez cada uno, y ningún otro. Ante un desajuste se hace **una** llamada de reparación: el código
+envía los errores concretos y la respuesta previa como datos en un bloque `<repair>`; cómo usarlo
+lo dice el prompt versionado. Si sigue fallando: `skeleton_mismatch`. Las demás causas
+(repetición, PII ajena, escalación léxica, juez) se rechazan sin reparación. La reparación consume
+el mismo deadline de la muestra.
+
 ### Comandos
 
 Desde la raíz, con Ollama y `qwen3:8b` ya disponibles:
@@ -74,7 +93,9 @@ La carga inicial de modelos/NER y la persistencia del ledger no forman parte de 
 Se desactiva `reasoning` en Ollama tanto para generación como para juez, a través de modelos
 creados por `convintel.llm.build_chat_model` e inyectados en `LLMClient`. El adaptador lo envía
 como `think=false`; no hay SDK directo ni cambios de `Settings`. Generación usa temperatura
-0.35 y juez 0, en clientes separados. Ambos usan el modelo configurado (`qwen3:8b` por defecto).
+0.35 y juez 0, en clientes separados. El juez es independiente del generador:
+`--judge-provider/--judge-model/--judge-model-revision` (por defecto, el mismo que el generador).
+`run.json` y `report.json` registran `model_id` y `judge_model_id`.
 La salida del CLI contiene IDs, contabilidad, causas y veredictos tipados, nunca diálogos ni PII.
 
 Para registrar también el digest conocido del modelo y escanear nombres con el modelo local:
@@ -83,7 +104,8 @@ Para registrar también el digest conocido del modelo y escanear nombres con el 
 uv sync --group ml
 uv run --group ml python -m scripts.synth.generate --n 10 --seed 42 \
   --model-revision 500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41 \
-  --ner-model en_core_web_lg --output data/synthetic/candidates/pilot-v2
+  --judge-provider anthropic --judge-model claude-haiku-4-5 \
+  --ner-model en_core_web_lg --output data/synthetic/candidates/pilot-v3-qwen
 ```
 
 El digest anterior identifica el modelo instalado durante T06, no todos los modelos con ese
@@ -116,7 +138,7 @@ En cada directorio de candidatos:
 | `report.json` | Distribuciones reales, rechazos, costes y cuotas pendientes. |
 | `review.jsonl` | Ledger humano append-only, creado únicamente al revisar. |
 
-`accepted` en v2 significa **validadores y juez superados**, nunca aprobación humana.
+`accepted` significa **validadores y juez superados**, nunca aprobación humana.
 El informe guarda `human_approved` al generarse; la fuente vigente de revisión es `review.jsonl`.
 Las distribuciones se calculan solo sobre candidatos admitidos. Los rechazos no se publican
 como muestras: conservan su causa, fase, contabilidad y, si respondió el juez, su veredicto.
@@ -125,7 +147,8 @@ Cada muestra contiene semilla global y de muestra, definición del intent, posic
 versión del generador/esquema, modelo y revisión, prompt/hash, hash de `uv.lock`, temperatura,
 razonamiento configurado, intento, tokens, coste y latencia. IDs e inicio sintético no dependen
 del reloj. `labels.judge` guarda modelo/revisión, prompt/hash, temperatura, `reasoning`, uso,
-latencia, hash de la entrada enmascarada y los cinco veredictos con índices de evidencia.
+latencia, hash de la entrada enmascarada, las cinco observaciones con índices de evidencia,
+`mismatched_labels` y `evidence_errors`. `provenance.repaired` indica si hubo reparación.
 
 `report.json` distingue categorías excluyentes `validator`, `judge`, `timeout`, `llm` y sus
 tasas sobre todos los intentos. Las causas detalladas y `judge_failed_labels` permiten separar
@@ -133,6 +156,11 @@ fallos de intent, resolución, escalación y sentimiento; estos últimos pueden 
 un mismo rechazo. `sample_elapsed_s` suma los intentos de cada ID, incluidos rechazos, y
 `timed_out_ids` identifica omisiones. Los contadores de tokens incluyen ambas llamadas y
 reparaciones reportadas; un timeout puede tener uso no reportado.
+
+Cada intento guarda `generation_usage` y `judge_usage` (segundos, tokens y coste de esa fase,
+reparaciones incluidas). `report.json` los agrega en `phase_totals`, `phase_mean_per_scenario`
+(sobre escenarios intentados) y `phase_per_admitted` (coste total dividido por admitidos), además
+de `repairs` y `repairs_fixed`. Si una llamada de pago se interrumpe, su coste es `null`.
 
 La semilla reproduce escenarios y PII con las versiones fijadas. **No promete reproducir
 bit a bit la respuesta del LLM**: el cliente actual no expone una semilla de inferencia.
@@ -207,19 +235,59 @@ Se rechazan turnos repetidos y bloques repetidos tras normalizar Unicode, mayús
 puntuación y enmascarar PII. El dedup entre muestras usa además Jaccard de 5-gramas (0.85).
 Agotar intentos o el tiempo deja índices pendientes y un código de salida no cero.
 
-Después se llama al juez, con contexto nuevo y solo texto enmascarado. Para cada etiqueta
-(intención, resolución, solicitud de escalación, sentimiento inicial y final) devuelve un
-booleano estricto `matches` e índices de turnos de evidencia. Un `true` significa que el
-texto respalda **el valor objetivo**, incluso si este es `false` o `negative`.
-Todos deben coincidir; no basta con una mayoría. Evidencia inexistente o procedente del agente
-para sentimiento invalida el veredicto. Resolución futura/prometida no cuenta como completada.
-No se permiten explicaciones libres ni texto del diálogo en la salida del juez.
+Después se llama al **juez ciego** (`synthetic_judge/v2`), con contexto nuevo. Solo recibe el
+diálogo enmascarado y la taxonomía de `INTENT_DESCRIPTIONS`; **nunca las etiquetas objetivo**.
+No decide si algo "coincide": extrae lo que observa (intent, `resolved`, `escalation_requested`,
+sentimiento del primer y último turno del cliente), cada valor con índices de evidencia. El intent
+está restringido en el esquema a los 77 nombres. El código compara después observación y objetivo;
+cualquier diferencia es `label_mismatch`, sin mayorías. El juez v1, que devolvía `matches` por
+objetivo, leía los objetivos `false` como "no observado" y rechazaba muestras válidas.
 
-Solo se publican candidatos con todos los checks del juez superados. El veredicto queda unido
-por SHA-256 a la entrada enmascarada y al escenario; modificar cualquiera vuelve la muestra
-inelegible. Review/export filtran además candidatos sin juez, rechazados, desactualizados o
-históricos. Superar el juez **no sustituye tu aprobación**. Usar el mismo modelo para escribir
-y juzgar puede compartir sesgos o producir falsos positivos; se conserva la revisión humana.
+El código valida la evidencia (`invalid_evidence` si falla): no vacía en los cinco campos e
+índices existentes; sentimiento y escalación citan **solo turnos del cliente**, y el sentimiento
+inicial/final debe incluir el primer/último turno del cliente. Para `escalation_requested=false`
+el juez cita los turnos del cliente revisados, porque una ausencia no tiene un único turno.
+Resolución futura/prometida no cuenta como completada. Sin explicaciones libres ni texto del
+diálogo en la salida del juez.
+
+Solo se publican candidatos con el juez superado. La observación queda unida por SHA-256 a la
+entrada enmascarada y a la taxonomía, y la revisión humana al hash de la muestra completa;
+modificar cualquiera vuelve la muestra inelegible. `reviewable()` recompara además observación y
+escenario. Review/export filtran candidatos sin juez, rechazados, desactualizados o históricos.
+Superar el juez **no sustituye tu aprobación**.
+
+### Puerta de controles del juez
+
+Antes de usar un juez en un piloto, `scripts.synth.judge_check` lo ejecuta sobre
+`tests/synth/judge_controls.jsonl`: diez diálogos escritos a mano con `truth` (lo que el texto
+muestra) y `targets`. Tres cumplen todas las etiquetas; siete rompen **exactamente un** campo
+(intent vecino, resolución solo prometida, resolución completada marcada como abierta, escalación
+solo ofrecida por el agente, petición de manager con objetivo `false`, inicio neutral con objetivo
+negativo y un «ok, thanks» seco con objetivo positivo). Un juez pasa solo si no marca nada en los
+válidos y marca exactamente el campo roto en los demás, con evidencia válida. Es una **puerta,
+no una estimación de exactitud**: los resultados se dan como «x/10 controles».
+
+```bash
+uv run python -m scripts.synth.judge_check --provider anthropic --model claude-haiku-4-5 \
+  --output data/synthetic/judge-checks/claude-haiku-4-5.json
+```
+
+Resultados (2026-10-18), `data/synthetic/judge-checks/`:
+
+| Campo: observado = verdad | qwen3:8b | claude-haiku-4-5 |
+| --- | ---: | ---: |
+| intent | 10/10 | 10/10 |
+| resolved | 9/10 | 10/10 |
+| escalation_requested | 10/10 | 10/10 |
+| start_sentiment | 10/10 | 10/10 |
+| end_sentiment | 9/10 | 10/10 |
+| **Controles superados** | **2/10** | **10/10** |
+| Tiempo / coste | 42.9 s / 0 USD | 21.1 s / 0.049 USD |
+
+qwen3:8b observa casi siempre el valor correcto, pero en 8 controles cita turnos del agente como
+evidencia de escalación ausente (y en uno, de sentimiento final), y en dos marca además un campo no
+roto. No pasa la puerta. **Haiku es el juez de ambos pilotos v3**, de modo que estos comparan solo
+generadores.
 
 El escaneo base usa patrones conservadores; `--ner-model en_core_web_lg` añade detección local
 de PERSON, sin descargas durante generación. Ninguno garantiza ausencia absoluta de PII.
@@ -231,14 +299,14 @@ exige recall perfecto de T02 para admitir una muestra.
 
 ```bash
 uv run python -m scripts.synth.review \
-  --dataset data/synthetic/candidates/pilot-v2 --reviewer ander --batch-size 10
+  --dataset data/synthetic/candidates/pilot-v3-haiku --reviewer ander --batch-size 10
 ```
 
 Para cada muestra, verificar:
 
 1. El intent principal encaja en la taxonomía; no existe otra intención principal competidora.
 2. El primer y último turno **del cliente** coinciden con inicio/fin; no confundir cortesía
-   del agente con emoción del cliente. Comprobar también el veredicto y evidencia del juez.
+   del agente con emoción del cliente. Comprobar también la observación y evidencia del juez.
 3. Resolución y solicitud de escalación tienen evidencia explícita y no contradictoria.
 4. Toda PII procede de las inserciones visibles, con tipo y límites correctos; no quedan datos
    personales inventados por el modelo, placeholders ni valores no etiquetados.
@@ -261,7 +329,7 @@ Tras generar y aprobar las 150 muestras:
 
 ```bash
 uv run python -m scripts.synth.review \
-  --dataset data/synthetic/candidates/pilot-v2 --reviewer ander \
+  --dataset data/synthetic/candidates/pilot-v3-haiku --reviewer ander \
   --export data/synthetic/golden-v1
 ```
 
@@ -284,7 +352,7 @@ La auditoría es independiente y nunca se importa desde el generador:
 
 ```bash
 uv run python -m scripts.synth.audit \
-  --conversations data/synthetic/candidates/pilot-v2/conversations.jsonl \
+  --conversations data/synthetic/candidates/pilot-v3-haiku/conversations.jsonl \
   --banking77-test-csv /ruta/al/test.csv --output data/generated/holdout-audit.json
 ```
 
@@ -309,8 +377,8 @@ Primero, descargar explícitamente los dos modelos fijados; la carga de inferenc
 uv run python -m scripts.synth.audio --download-voices --voices-dir data/generated/voices
 uv sync --group ml
 uv run --group ml python -m scripts.synth.audio \
-  --dataset data/synthetic/candidates/pilot-v2/conversations.jsonl \
-  --voices-dir data/generated/voices --output data/generated/synthetic/pilot-v2
+  --dataset data/synthetic/candidates/pilot-v3-haiku/conversations.jsonl \
+  --voices-dir data/generated/voices --output data/generated/synthetic/pilot-v3-haiku
 ```
 
 La segunda orden puede consumir también el golden publicado. No llama al LLM. Produce WAV
@@ -343,6 +411,42 @@ porque Faker lo requiere y el resolver había seleccionado una versión publicad
 se prefiere una release verificada de 2025-03-23. No se usan fechas ni zonas horarias de Faker.
 No se añadieron dependencias al servicio base, SDKs de proveedor ni bibliotecas de audio:
 se reutilizan PyAV/numpy y `wave`.
+
+## Pilotos v3 (2026-10-18)
+
+Mismos diez escenarios de la semilla 42, generador 3.0.0, NER local, deadline de 120 s por
+muestra y **el mismo juez para ambos**: `claude-haiku-4-5` con `synthetic_judge/v2`. Solo cambia
+el generador. Artefactos en `data/synthetic/candidates/pilot-v3-{haiku,qwen}/`. **0 aprobaciones
+humanas**: son candidatos pendientes de revisión.
+
+| Métrica | Haiku genera | qwen3:8b genera |
+| --- | ---: | ---: |
+| Admitidos (validadores + juez) | **8/10** | 4/10 |
+| Admitidos en el primer intento | 5/10 | 1/10 |
+| Intentos / rechazos | 17 / 9 | 26 / 22 |
+| Rechazos del juez (`label_mismatch`) | 8 | 14 |
+| Rechazos de validadores | 1 `escalation_evidence` | 6 `escalation_evidence`, 2 `skeleton_mismatch` |
+| Campos fallidos según el juez | inicio 4, final 3, resolved 2 | resolved 7, intent 5, inicio 3, final 2 |
+| Reparaciones / corregidas | 0 / 0 | 2 / 0 |
+| Pendientes | 007, 008 | 000, 001, 004, 005, 006, 008 |
+| Generación por escenario (media) | 6.8 s · 0.0066 USD | 15.6 s · 0 USD (local) |
+| Juez por escenario (media) | 3.8 s · 0.0087 USD | 4.4 s · 0.0096 USD |
+| Generación por admitido | 8.4 s · 0.0082 USD | 38.9 s · 0 USD |
+| Juez por admitido | 4.8 s · 0.0108 USD | 11.1 s · 0.0240 USD |
+| Coste total del piloto | 0.152 USD | 0.096 USD |
+
+El esqueleto elimina los fallos de PII que bloquearon v2: ningún rechazo por
+`pii_placement`/`placeholder_inventory` en 43 intentos. Los rechazos restantes son semánticos y
+los detecta el juez; no hubo timeouts ni errores LLM. qwen3:8b no consigue escribir la petición
+explícita de escalación (6/6 rechazos léxicos en 001 y 006). En ambos generadores, el escenario 008
+(inicio negativo en una pregunta informativa de `visa_or_mastercard`) falla siempre en el
+sentimiento inicial, y Haiku tiende a cerrar con un final positivo cuando el objetivo es neutral (007).
+
+Observaciones preliminares sobre candidatos de Haiku, **no decisiones de revisión**:
+`001` resulta forzado porque el plan de PII exige un IBAN en un top-up con tarjeta; en `003` el
+agente ofrece derivar el caso al equipo de pagos, aunque el prompt pide no ofrecer escalación
+(la etiqueta del cliente sigue siendo correcta); en `002` el final positivo es moderado.
+No se ha generado nada más allá de estos diez escenarios ni se ha renderizado audio.
 
 ## Piloto v2: resultado bloqueante (2026-10-04)
 
@@ -468,7 +572,11 @@ versión experimental. Queda pendiente el OK del usuario para cualquier ampliaci
 - TTS neutro no reproduce necesariamente la prosodia emocional indicada por etiquetas textuales.
 - ASR puede perder PII hablada o cambiar segmentación; reportar esa pérdida por separado.
 - Escaneo automático, juez y revisión humana pueden fallar; no se afirma anotación infalible.
-- Generador y juez usan Qwen3:8b en contextos distintos, pero comparten posibles sesgos. Sus
+- En `pilot-v3-haiku`, Haiku juzga texto generado por Haiku: hay riesgo de **autopreferencia**
+  (favorecer su propio estilo o compartir sus errores), así que su tasa de admisión puede estar
+  inflada frente a `pilot-v3-qwen`, que usa el mismo juez sobre otro generador. La puerta de
+  controles no mide ese sesgo; solo la revisión humana lo acota.
+- En pilotos anteriores, generador y juez usaban Qwen3:8b en contextos distintos. Sus
   acuerdos no son una medición independiente de precisión ni una aprobación de ground truth.
 - El conjunto no debe usarse para entrenar ni calibrar T03/T02. Train/dev sintéticos son follow-up.
 
