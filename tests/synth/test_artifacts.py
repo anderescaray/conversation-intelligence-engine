@@ -6,6 +6,7 @@ from convintel.contracts import Conversation
 from scripts.synth.audio import AudioManifest
 from scripts.synth.judge import reviewable
 from scripts.synth.pii import values_for
+from scripts.synth.scenarios import scenarios
 from scripts.synth.schema import Attempt, LegacyAnnotation, Report, RunSpec
 from scripts.synth.storage import file_hash, load_samples, read_jsonl
 from scripts.synth.validation import ensure_unique, validate_sample
@@ -83,3 +84,20 @@ def test_v3_pilots_share_one_judge_and_publish_only_judge_passed_candidates(
     attempts = read_jsonl(directory / "attempts.jsonl", Attempt)
     assert len(attempts) == report.attempts
     assert not {"pii_placement", "placeholder_inventory"} & set(report.rejection_reasons)
+
+
+def test_v3_1_pilot_reports_unfilled_info_slots_without_relabeling() -> None:
+    directory = ROOT / "data/synthetic/candidates/pilot-v3.1-haiku"
+    run = RunSpec.model_validate_json((directory / "run.json").read_text())
+    report = Report.model_validate_json((directory / "report.json").read_text())
+    samples = load_samples(directory)
+    plan = scenarios(42)
+    assert run.generator_version == "3.1.0" and run.max_rerolls == 2
+    assert report.candidates == len(samples) == 7 and report.human_approved == 0
+    assert report.unfilled_indices == [5, 7, 8] and report.stopped_reason is None
+    assert report.rejections_by_stratum["intent_kind"]["info"].exhausted == 3
+    for index, sample in enumerate(samples):
+        assert sample.labels.scenario == plan[sample.labels.scenario.index]
+        assert reviewable(sample)
+        validate_sample(sample)
+        ensure_unique(sample, samples[:index])

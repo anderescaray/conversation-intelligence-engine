@@ -1,0 +1,370 @@
+{
+  "model_id": "anthropic:claude-haiku-4-5",
+  "judge_model_id": "anthropic:claude-haiku-4-5",
+  "target": 10,
+  "candidates": 7,
+  "human_approved": 0,
+  "attempts": 36,
+  "rejects": 29,
+  "reject_rate": 0.8055555555555556,
+  "elapsed_s": 221.01077187199553,
+  "mean_attempt_s": 6.139188107555431,
+  "mean_accepted_attempt_s": 6.152482767714251,
+  "input_tokens": 219468,
+  "output_tokens": 22232,
+  "cost_usd": 0.33062800000000003,
+  "by_channel": {
+    "chat": 6,
+    "voice": 1
+  },
+  "by_intent": {
+    "exchange_via_app": 1,
+    "pending_top_up": 1,
+    "terminate_account": 1,
+    "cancel_transfer": 1,
+    "edit_personal_details": 1,
+    "pending_cash_withdrawal": 1,
+    "pin_blocked": 1
+  },
+  "by_sentiment": {
+    "neutral->negative": 2,
+    "negative->negative": 2,
+    "neutral->positive": 1,
+    "neutral->neutral": 1,
+    "negative->neutral": 1
+  },
+  "by_resolved": {
+    "false": 6,
+    "true": 1
+  },
+  "by_escalation": {
+    "false": 6,
+    "true": 1
+  },
+  "by_pii": {
+    "EMAIL_ADDRESS": 2,
+    "IBAN_CODE": 4,
+    "ACCOUNT_NUMBER": 3,
+    "PERSON": 1,
+    "CREDIT_CARD": 3,
+    "PHONE_NUMBER": 1
+  },
+  "rejection_reasons": {
+    "label_mismatch": 29
+  },
+  "rejection_categories": {
+    "judge": 29
+  },
+  "rejection_rates": {
+    "judge": 0.8055555555555556
+  },
+  "judge_failed_labels": {
+    "intent": 1,
+    "resolved": 10,
+    "end_sentiment": 13,
+    "start_sentiment": 9
+  },
+  "sample_elapsed_s": {
+    "synth-v3-42-000": 6.332720473999871,
+    "synth-v3-42-001": 11.710819283999626,
+    "synth-v3-42-002": 5.770794142000341,
+    "synth-v3-42-003": 6.8750898859998415,
+    "synth-v3-42-004": 5.989087095999821,
+    "synth-v3-42-005": 56.04529711699706,
+    "synth-v3-42-006": 6.303118210998946,
+    "synth-v3-42-007": 60.38897842699771,
+    "synth-v3-42-008": 50.13333260300169,
+    "synth-v3-42-009": 11.461534632000621
+  },
+  "timed_out_ids": [],
+  "missing_indices": [
+    5,
+    7,
+    8
+  ],
+  "repairs": 0,
+  "repairs_fixed": 0,
+  "phase_totals": {
+    "generation": {
+      "seconds": 138.8784613450016,
+      "input_tokens": 68349,
+      "output_tokens": 15001,
+      "cost_usd": 0.143354
+    },
+    "judge": {
+      "seconds": 79.9713978309992,
+      "input_tokens": 151119,
+      "output_tokens": 7231,
+      "cost_usd": 0.187274
+    }
+  },
+  "phase_mean_per_scenario": {
+    "generation": {
+      "seconds": 13.88784613450016,
+      "input_tokens": 6835,
+      "output_tokens": 1500,
+      "cost_usd": 0.014335400000000002
+    },
+    "judge": {
+      "seconds": 7.99713978309992,
+      "input_tokens": 15112,
+      "output_tokens": 723,
+      "cost_usd": 0.018727399999999998
+    }
+  },
+  "phase_per_admitted": {
+    "generation": {
+      "seconds": 19.839780192143085,
+      "input_tokens": 9764,
+      "output_tokens": 2143,
+      "cost_usd": 0.02047914285714286
+    },
+    "judge": {
+      "seconds": 11.424485404428456,
+      "input_tokens": 21588,
+      "output_tokens": 1033,
+      "cost_usd": 0.02675342857142857
+    }
+  },
+  "rerolled_ids": [
+    "synth-v3-42-005",
+    "synth-v3-42-007",
+    "synth-v3-42-008"
+  ],
+  "unfilled_indices": [
+    5,
+    7,
+    8
+  ],
+  "rejections_by_stratum": {
+    "channel": {
+      "chat": {
+        "attempts": 17,
+        "rejected": 11,
+        "reject_rate": 0.6470588235294118,
+        "scenarios": 7,
+        "exhausted": 1
+      },
+      "voice": {
+        "attempts": 19,
+        "rejected": 18,
+        "reject_rate": 0.9473684210526315,
+        "scenarios": 3,
+        "exhausted": 2
+      }
+    },
+    "intent_kind": {
+      "info": {
+        "attempts": 27,
+        "rejected": 27,
+        "reject_rate": 1.0,
+        "scenarios": 3,
+        "exhausted": 3
+      },
+      "problem": {
+        "attempts": 5,
+        "rejected": 2,
+        "reject_rate": 0.4,
+        "scenarios": 3,
+        "exhausted": 0
+      },
+      "request": {
+        "attempts": 4,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 4,
+        "exhausted": 0
+      }
+    },
+    "pii_family": {
+      "account": {
+        "attempts": 2,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 2,
+        "exhausted": 0
+      },
+      "bank": {
+        "attempts": 10,
+        "rejected": 9,
+        "reject_rate": 0.9,
+        "scenarios": 2,
+        "exhausted": 1
+      },
+      "card": {
+        "attempts": 3,
+        "rejected": 1,
+        "reject_rate": 0.3333333333333333,
+        "scenarios": 2,
+        "exhausted": 0
+      },
+      "general": {
+        "attempts": 19,
+        "rejected": 18,
+        "reject_rate": 0.9473684210526315,
+        "scenarios": 3,
+        "exhausted": 2
+      },
+      "topup": {
+        "attempts": 2,
+        "rejected": 1,
+        "reject_rate": 0.5,
+        "scenarios": 1,
+        "exhausted": 0
+      }
+    },
+    "resolved": {
+      "false": {
+        "attempts": 17,
+        "rejected": 11,
+        "reject_rate": 0.6470588235294118,
+        "scenarios": 7,
+        "exhausted": 1
+      },
+      "true": {
+        "attempts": 19,
+        "rejected": 18,
+        "reject_rate": 0.9473684210526315,
+        "scenarios": 3,
+        "exhausted": 2
+      }
+    },
+    "escalation_requested": {
+      "false": {
+        "attempts": 35,
+        "rejected": 29,
+        "reject_rate": 0.8285714285714286,
+        "scenarios": 9,
+        "exhausted": 3
+      },
+      "true": {
+        "attempts": 1,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 1,
+        "exhausted": 0
+      }
+    },
+    "sentiment": {
+      "negative->negative": {
+        "attempts": 3,
+        "rejected": 1,
+        "reject_rate": 0.3333333333333333,
+        "scenarios": 2,
+        "exhausted": 0
+      },
+      "negative->neutral": {
+        "attempts": 2,
+        "rejected": 1,
+        "reject_rate": 0.5,
+        "scenarios": 1,
+        "exhausted": 0
+      },
+      "neutral->negative": {
+        "attempts": 2,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 2,
+        "exhausted": 0
+      },
+      "neutral->neutral": {
+        "attempts": 19,
+        "rejected": 18,
+        "reject_rate": 0.9473684210526315,
+        "scenarios": 3,
+        "exhausted": 2
+      },
+      "neutral->positive": {
+        "attempts": 1,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 1,
+        "exhausted": 0
+      },
+      "positive->positive": {
+        "attempts": 9,
+        "rejected": 9,
+        "reject_rate": 1.0,
+        "scenarios": 1,
+        "exhausted": 1
+      }
+    },
+    "pii": {
+      "with": {
+        "attempts": 26,
+        "rejected": 20,
+        "reject_rate": 0.7692307692307693,
+        "scenarios": 8,
+        "exhausted": 2
+      },
+      "without": {
+        "attempts": 10,
+        "rejected": 9,
+        "reject_rate": 0.9,
+        "scenarios": 2,
+        "exhausted": 1
+      }
+    },
+    "customer_turns": {
+      "3": {
+        "attempts": 10,
+        "rejected": 5,
+        "reject_rate": 0.5,
+        "scenarios": 6,
+        "exhausted": 1
+      },
+      "4": {
+        "attempts": 26,
+        "rejected": 24,
+        "reject_rate": 0.9230769230769231,
+        "scenarios": 5,
+        "exhausted": 3
+      }
+    },
+    "reroll": {
+      "0": {
+        "attempts": 18,
+        "rejected": 11,
+        "reject_rate": 0.6111111111111112,
+        "scenarios": 10,
+        "exhausted": 3
+      },
+      "1": {
+        "attempts": 9,
+        "rejected": 9,
+        "reject_rate": 1.0,
+        "scenarios": 3,
+        "exhausted": 3
+      },
+      "2": {
+        "attempts": 9,
+        "rejected": 9,
+        "reject_rate": 1.0,
+        "scenarios": 3,
+        "exhausted": 3
+      }
+    }
+  },
+  "admitted_free_attributes": {
+    "persona": {
+      "busy customer": 5,
+      "experienced user": 2
+    },
+    "verbosity": {
+      "brief": 3,
+      "moderate": 4
+    },
+    "noise": {
+      "light": 6,
+      "none": 1
+    },
+    "customer_turns": {
+      "3": 5,
+      "4": 2
+    },
+    "reroll": {
+      "0": 7
+    }
+  },
+  "stopped_reason": null
+}

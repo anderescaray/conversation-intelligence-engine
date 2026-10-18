@@ -16,23 +16,95 @@ T03 entrena con Banking77 real. Tampoco implementa el eval runner/CI gate de T11
 
 ## Generación label-first
 
-El generador **3.0.0 / esquema 3** utiliza `prompts/synthetic/v3.yaml` (salida estructurada
-por turno contra un esqueleto construido por código) y el juez ciego `prompts/synthetic_judge/v2.yaml`.
+El generador **3.1.0 / esquema 3** usa el **plan de escenarios v3** (abajo), `prompts/synthetic/v3.yaml`
+(salida estructurada por turno contra un esqueleto construido por código) y el juez ciego
+`prompts/synthetic_judge/v2.yaml`. 3.1 no cambia ningún prompt, así que la puerta de controles del
+juez sigue vigente. El generador 3.0.0 usaba el plan v2.
 Los prompts `synthetic/v1`, `synthetic/v2`, `synthetic_judge/v1` y los pilotos v1, v1.1 y v2 son
 históricos e inmutables. El lector conserva sus campos y hashes originales, pero no son elegibles
 para revisión ni golden. No hay conversión implícita de etiquetas.
 
-**IDs de escenario.** Las muestras v3 conservan IDs `synth-v2-<seed>-<index>`. El prefijo identifica
-el **plan de escenarios v2** (reglas de muestreo de abajo), que no cambia en v3, y no la versión del
-generador; esta queda en `run.json` y en `provenance.generator_version`/`schema_version`. Mantenerlos
-permite comparar pilotos y generadores sobre exactamente los mismos escenarios.
+**IDs de escenario.** El prefijo identifica el **plan de escenarios**, no la versión del generador
+(que queda en `run.json` y en `provenance`). Los pilotos del generador 3.0.0 usan el plan v2 y
+conservan `synth-v2-<seed>-<index>`, para compararse sobre los mismos escenarios. El plan v3 cambia
+etiquetas y PII, así que sus muestras usan `synth-v3-<seed>-<index>`: un mismo índice no es el mismo
+escenario en ambos planes. `scenarios.legacy_scenarios(seed)` reproduce el plan v2 y un test
+comprueba que coincide con los candidatos guardados.
 
 `scripts.synth.scenarios` construye todo el plan de 150 escenarios antes de invocar al LLM.
 Cada intent tiene una definición breve, escrita en código en `INTENT_DESCRIPTIONS`, almacenada
 con la muestra y enviada al generador y al juez. Son definiciones operativas revisables, no
 utterances ni definiciones supuestamente oficiales de Banking77.
 
-### Reglas de muestreo v2
+### Plan de escenarios v3 (generador 3.1): plausibilidad por intent
+
+`scripts/synth/plausibility.py` clasifica explícitamente los 77 intents (un test exige cobertura
+exacta) en **tipo** y **familia de PII**. Solo se muestrea dentro de estas reglas, de modo que el
+generador nunca recibe un objetivo contradictorio; `ScenarioV3` las vuelve a validar.
+
+| Tipo (intents) | Escalación | Inicio | Final si resuelto | Final si no resuelto |
+| --- | --- | --- | --- | --- |
+| info (22): preguntas de producto o política | nunca | neutral:positivo 4:1 | positivo:neutral 1:1 | neutral:negativo 3:2 |
+| problem (37): algo ha fallado | sí | negativo:neutral 3:1 | positivo:neutral 4:1 | negativo:neutral 7:3 |
+| request (18): el cliente pide una acción | sí | neutral:negativo:positivo 6:3:1 | positivo:neutral 3:1 | negativo:neutral 1:1 |
+
+Las escalaciones empiezan siempre negativas y, si no se resuelven, terminan negativas. Los tres
+casos neutral→positivo sin resolver solo se asignan a info/request, nunca con escalación.
+
+| Familia de PII | Tipos permitidos además de identidad (nombre, teléfono, email) |
+| --- | --- |
+| card (33): tarjeta, cajero, pagos y refunds con tarjeta | `CREDIT_CARD` |
+| bank (12): transferencias, recepción de dinero, débitos directos | `IBAN_CODE`, `ACCOUNT_NUMBER` |
+| topup (3): top-up pendiente, fallido o revertido | `CREDIT_CARD`, `IBAN_CODE` |
+| account (11): datos, cierre, verificación, depósitos | `ACCOUNT_NUMBER`; además `IBAN_CODE` en `terminate_account` y `verify_source_of_funds` |
+| general (18): producto y política | — |
+
+Los tipos de cada escenario se eligen con un greedy determinista que equilibra recuentos, empezando
+por los escenarios con menos opciones. Las cuotas exactas se mantienen: 100 chat / 50 voz, cobertura
+73×2 + 4×1 con todos los intents en chat, `resolved` 75/75, 30 escalaciones (20 chat / 10 voz, solo
+problem/request), 30 controles sin PII, 240 valores completos y 30 confirmaciones `last_four`. El
+sentimiento no tiene cuota exacta: se muestrea con estos pesos.
+
+Reparto de los 150 con semilla 42 (`data/synthetic/plans/plan-v3-seed42.json`):
+
+| Tipo de PII | Plan v2 | Plan v3 |
+| --- | ---: | ---: |
+| `EMAIL_ADDRESS` | 54 | 45 |
+| `CREDIT_CARD` | 53 | 45 |
+| `PERSON` | 34 | 45 |
+| `PHONE_NUMBER` | 33 | 45 |
+| `ACCOUNT_NUMBER` | 34 | 34 |
+| `IBAN_CODE` | 32 | **26** |
+
+El IBAN baja porque solo es plausible en 17 intents. Confirmaciones `last_four`: tarjeta 13,
+teléfono 7, IBAN 5, cuenta 5. Tipos de intent en el plan: problem 72, info 42, request 36.
+
+```bash
+uv run python -m scripts.synth.scenarios --seed 42 --output data/synthetic/plans/plan-v3-seed42.json
+```
+
+### Reposición y sesgo de supervivencia
+
+Si un hueco agota sus tres intentos, se **re-sortea dentro de su estrato** hasta dos veces
+(`scenario.reroll`, `Attempt.reroll`). Se conservan intent, canal, `resolved`, escalación,
+inicio/fin, tipos y posiciones de PII y `last_four`. Se vuelven a sortear persona, verbosidad,
+ruido, número de turnos y valores de PII, con `sample_seed = H(seed, index, reroll)`. Las cuotas se
+conservan exactamente. Sin éxito tras dos re-sorteos, el hueco queda en `unfilled_indices`, con
+código de salida no cero; **nunca** se cambian etiquetas, intent ni canal para rellenarlo. Un fallo
+sistemático en un estrato señala una regla de plausibilidad mal puesta: se corrige el plan con una
+versión nueva. Los 120 s por muestra cubren el hueco completo, re-sorteos incluidos, con un máximo de 9 intentos.
+
+Los re-sorteos pueden favorecer atributos «fáciles». Por eso `report.json` publica `rerolled_ids`,
+`admitted_free_attributes` y `rejections_by_stratum`: intentos, rechazos, tasa, escenarios y huecos
+agotados por canal, tipo de intent, familia de PII, `resolved`, escalación, inicio→fin, con o sin
+PII, turnos y re-sorteo.
+
+`--max-cost-usd` (sin límite por defecto) detiene la ejecución antes del siguiente intento cuando el
+gasto de la invocación alcanza el límite, o cuando hay coste de pago desconocido. Guarda ledger e
+informe (`stopped_reason=max_cost`) y se reanuda con `--resume`. Puede excederse como mucho en el
+coste de un intento.
+
+### Reglas de muestreo v2 (plan histórico, generadores 2.0 y 3.0)
 
 - Sentimiento: `start_sentiment` y `end_sentiment` del **primer y último turno del cliente**.
   Valores: `negative`, `neutral`, `positive`. No se asignan etiquetas a turnos intermedios.
@@ -412,7 +484,42 @@ se prefiere una release verificada de 2025-03-23. No se usan fechas ni zonas hor
 No se añadieron dependencias al servicio base, SDKs de proveedor ni bibliotecas de audio:
 se reutilizan PyAV/numpy y `wave`.
 
-## Pilotos v3 (2026-10-18)
+## Piloto 3.1 (2026-10-18): plan v3 con Haiku
+
+Primeros diez escenarios del plan v3, semilla 42. Haiku genera y juzga. `--max-cost-usd 0.50`
+(no se alcanzó). Artefactos en `data/synthetic/candidates/pilot-v3.1-haiku/`. **7/10 admitidos,
+0 aprobaciones humanas.** Como el plan cambió, estos diez escenarios no son los del piloto v3.
+
+| Métrica | Valor |
+| --- | ---: |
+| Admitidos / huecos sin rellenar | 7 / 3 (005, 007, 008) |
+| Intentos / rechazos | 36 / 29, todos `label_mismatch` del juez |
+| Re-sorteos / rescatados | 3 huecos / 0 |
+| Campos fallidos | final 13, resolved 10, inicio 9, intent 1 |
+| Generación por hueco (media) | 13.9 s · 0.0143 USD |
+| Juez por hueco (media) | 8.0 s · 0.0187 USD |
+| Coste por admitido (gen. + juez) | 0.047 USD |
+| Coste y tiempo totales | 0.331 USD · 221 s |
+
+| Estrato `intent_kind` | Intentos | Rechazos | Huecos | Agotados |
+| --- | ---: | ---: | ---: | ---: |
+| info | 27 | 27 | 3 | **3** |
+| problem | 5 | 2 | 3 | 0 |
+| request | 4 | 0 | 4 | 0 |
+
+Todos los problem/request se admitieron, y ningún escenario informativo. Cada hueco falla siempre
+en el mismo campo, en los nueve intentos:
+- **005** `receiving_money`, sin resolver, neutral→neutral: el juez ve la pregunta respondida (`resolved`).
+- **007** `fiat_currency_support`, inicio positivo: el juez lee el primer turno como neutral.
+- **008** `visa_or_mastercard`, resuelto, final neutral: el texto termina en positivo.
+
+Los re-sorteos de atributos libres no corrigen una combinación de etiquetas poco plausible, y
+aquí costaron 27 intentos (~0,25 USD). Las reglas para info (pregunta sin resolver, inicio positivo,
+final neutral tras respuesta) necesitan revisión antes de escalar. Queda pendiente decidirlo.
+Admitidos por atributos: 5/7 de «busy customer», 6/7 con ruido ligero y 5/7 con 3 turnos;
+la muestra es pequeña.
+
+## Pilotos v3 del generador 3.0.0, plan v2 (2026-10-18)
 
 Mismos diez escenarios de la semilla 42, generador 3.0.0, NER local, deadline de 120 s por
 muestra y **el mismo juez para ambos**: `claude-haiku-4-5` con `synthetic_judge/v2`. Solo cambia
