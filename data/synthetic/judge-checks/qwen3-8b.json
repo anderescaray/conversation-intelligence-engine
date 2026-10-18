@@ -1,0 +1,557 @@
+{
+  "generator_version": "2.0.0",
+  "judge_model_id": "ollama:qwen3:8b",
+  "judge_model_revision": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+  "prompt_version": "synthetic_judge/v2",
+  "prompt_sha256": "31bc0643eb46cc851890bc1c82db1c10616c76b126c98f700ae5d34bdbc07256",
+  "controls_sha256": "69571df22ea2d1419640c7dd1d61d8e4c448e2b3fd88e6c08a60c07679c206f5",
+  "controls": 10,
+  "passed_controls": "2/10",
+  "field_correct": {
+    "intent": "10/10",
+    "resolved": "9/10",
+    "escalation_requested": "10/10",
+    "start_sentiment": "10/10",
+    "end_sentiment": "9/10"
+  },
+  "gate_passed": false,
+  "elapsed_s": 42.85763328499979,
+  "input_tokens": 19224,
+  "output_tokens": 1131,
+  "cost_usd": 0.0,
+  "results": [
+    {
+      "id": "ctl-01-valid-resolved",
+      "broken": null,
+      "flagged": [],
+      "wrong_fields": [],
+      "evidence_errors": [
+        "escalation_requested:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "activate_my_card",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": true,
+          "evidence_turns": [
+            2,
+            4
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "start_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "positive",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 18353.601806999905,
+      "input_tokens": 1943,
+      "output_tokens": 120,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-02-valid-escalation",
+      "broken": null,
+      "flagged": [],
+      "wrong_fields": [],
+      "evidence_errors": [],
+      "observation": {
+        "intent": {
+          "value": "declined_transfer",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": false,
+          "evidence_turns": [
+            4
+          ]
+        },
+        "escalation_requested": {
+          "value": true,
+          "evidence_turns": [
+            2
+          ]
+        },
+        "start_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": true,
+      "latency_ms": 2487.9693889997725,
+      "input_tokens": 1947,
+      "output_tokens": 98,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-03-valid-informational",
+      "broken": null,
+      "flagged": [],
+      "wrong_fields": [],
+      "evidence_errors": [
+        "escalation_requested:agent_turn",
+        "end_sentiment:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "country_support",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": false,
+          "evidence_turns": [
+            5
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "start_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            5
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 2818.346021000252,
+      "input_tokens": 1925,
+      "output_tokens": 112,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-04-broken-intent",
+      "broken": "intent",
+      "flagged": [
+        "intent"
+      ],
+      "wrong_fields": [],
+      "evidence_errors": [
+        "escalation_requested:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "exchange_via_app",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": true,
+          "evidence_turns": [
+            2,
+            3
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "start_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 2912.5113999998575,
+      "input_tokens": 1919,
+      "output_tokens": 116,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-05-broken-resolved-true",
+      "broken": "resolved",
+      "flagged": [
+        "resolved",
+        "end_sentiment"
+      ],
+      "wrong_fields": [
+        "end_sentiment"
+      ],
+      "evidence_errors": [
+        "escalation_requested:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "card_payment_not_recognised",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": false,
+          "evidence_turns": [
+            4
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "start_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 2773.4897959999216,
+      "input_tokens": 1922,
+      "output_tokens": 113,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-06-broken-resolved-false",
+      "broken": "resolved",
+      "flagged": [
+        "resolved"
+      ],
+      "wrong_fields": [],
+      "evidence_errors": [
+        "escalation_requested:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "change_pin",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": true,
+          "evidence_turns": [
+            2,
+            3
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "start_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 2846.6151419997914,
+      "input_tokens": 1888,
+      "output_tokens": 115,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-07-broken-escalation-true",
+      "broken": "escalation_requested",
+      "flagged": [
+        "escalation_requested"
+      ],
+      "wrong_fields": [],
+      "evidence_errors": [
+        "escalation_requested:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "card_payment_fee_charged",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": false,
+          "evidence_turns": [
+            4
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            3
+          ]
+        },
+        "start_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 2581.4325510000344,
+      "input_tokens": 1927,
+      "output_tokens": 100,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-08-broken-escalation-false",
+      "broken": "escalation_requested",
+      "flagged": [
+        "escalation_requested"
+      ],
+      "wrong_fields": [],
+      "evidence_errors": [],
+      "observation": {
+        "intent": {
+          "value": "declined_cash_withdrawal",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "escalation_requested": {
+          "value": true,
+          "evidence_turns": [
+            2
+          ]
+        },
+        "start_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": true,
+      "latency_ms": 2695.408806999694,
+      "input_tokens": 1927,
+      "output_tokens": 116,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-09-broken-start",
+      "broken": "start_sentiment",
+      "flagged": [
+        "resolved",
+        "start_sentiment"
+      ],
+      "wrong_fields": [
+        "resolved"
+      ],
+      "evidence_errors": [
+        "escalation_requested:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "card_delivery_estimate",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "start_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "positive",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 2837.868301000526,
+      "input_tokens": 1901,
+      "output_tokens": 128,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "ctl-10-broken-end",
+      "broken": "end_sentiment",
+      "flagged": [
+        "end_sentiment"
+      ],
+      "wrong_fields": [],
+      "evidence_errors": [
+        "escalation_requested:agent_turn"
+      ],
+      "observation": {
+        "intent": {
+          "value": "automatic_top_up",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "resolved": {
+          "value": true,
+          "evidence_turns": [
+            3
+          ]
+        },
+        "escalation_requested": {
+          "value": false,
+          "evidence_turns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "start_sentiment": {
+          "value": "negative",
+          "evidence_turns": [
+            0
+          ]
+        },
+        "end_sentiment": {
+          "value": "neutral",
+          "evidence_turns": [
+            4
+          ]
+        }
+      },
+      "error": null,
+      "ok": false,
+      "latency_ms": 2534.0137849998428,
+      "input_tokens": 1925,
+      "output_tokens": 113,
+      "cost_usd": 0.0
+    }
+  ]
+}
