@@ -2,14 +2,14 @@ import re
 import threading
 import unicodedata
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from typing import Literal
 
 from convintel.errors import ConvIntelError
 
 from .pii import TOKEN, value_key, values_for
 from .scenarios import INTENT_DESCRIPTIONS
-from .schema import Draft, JudgeRecord, Placement, Sample, Scenario
+from .schema import Draft, JudgeRecord, Placement, Sample, Scenario, SkeletonDraft, SkeletonTurn
 
 NameScanner = Callable[[str], bool]
 _SUSPECT = re.compile(
@@ -62,6 +62,28 @@ def reject_repetition(texts: Iterable[str]) -> None:
                 raise Rejected("repeated_block")
     if len(set(keys)) != len(keys):
         raise Rejected("repeated_turn")
+
+
+def skeleton_errors(draft: SkeletonDraft, plan: Sequence[SkeletonTurn]) -> list[str]:
+    """Concrete mismatches against the code-built skeleton, phrased for a single repair call."""
+    errors: list[str] = []
+    if len(draft.turns) != len(plan):
+        errors.append(f"expected exactly {len(plan)} turns, got {len(draft.turns)}")
+    for index, (turn, expected) in enumerate(zip(draft.turns, plan, strict=False)):
+        if turn.turn_index != expected.turn_index:
+            errors.append(f"entry {index} must have turn_index {expected.turn_index}")
+        if turn.speaker != expected.speaker:
+            errors.append(f"turn {index} must be spoken by the {expected.speaker}")
+        found = Counter(TOKEN.findall(turn.text))
+        for token in expected.placeholders:
+            if found[token] != 1:
+                errors.append(
+                    f"turn {index} ({expected.speaker}) must contain {token} exactly once; "
+                    f"found {found[token]}"
+                )
+        for token in sorted(set(found) - set(expected.placeholders)):
+            errors.append(f"turn {index} ({expected.speaker}) must not contain {token}")
+    return errors
 
 
 def validate_draft(draft: Draft, scenario: Scenario, scanner: NameScanner | None = None) -> None:

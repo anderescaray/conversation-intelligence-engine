@@ -35,14 +35,14 @@ class SlowFake(FakeStructuredChatModel):
 async def test_judge_timeout_skips_sample_and_resume_does_not_restart_budget(
     tmp_path: Path,
     settings: Settings,
-    draft_factory: Callable,
+    skeleton_draft: Callable,
     judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
     model = SlowFake(
         delays=[0, 1],
         responses=[
-            tool_answer(Draft, draft_factory(scenario).model_dump()),
+            tool_answer(Draft, skeleton_draft(scenario).model_dump()),
             tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ],
     )
@@ -72,13 +72,14 @@ async def test_judge_timeout_skips_sample_and_resume_does_not_restart_budget(
 async def test_validator_retries_share_one_sample_deadline(
     tmp_path: Path,
     settings: Settings,
-    draft_factory: Callable,
+    skeleton_draft: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
-    bad = draft_factory(scenario).model_dump()
+    bad = skeleton_draft(scenario).model_dump()
     bad["turns"][0]["text"] = "Email invented@example.com"
     model = SlowFake(
-        delays=[0.35, 0.35], responses=[tool_answer(Draft, bad), tool_answer(Draft, bad)]
+        delays=[0.35, 0.35],
+        responses=[tool_answer(Draft, bad), tool_answer(Draft, bad)],
     )
     result = await generate_run(
         tmp_path / "pilot",
@@ -114,14 +115,14 @@ async def test_sample_timeout_cannot_be_relaxed_above_120(
 async def test_timeout_continues_with_next_sample(
     tmp_path: Path,
     settings: Settings,
-    draft_factory: Callable,
+    skeleton_draft: Callable,
     judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[1]
     model = SlowFake(
         delays=[1, 0, 0],
         responses=[
-            tool_answer(Draft, draft_factory(scenario).model_dump()),
+            tool_answer(Draft, skeleton_draft(scenario).model_dump()),
             tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ],
     )

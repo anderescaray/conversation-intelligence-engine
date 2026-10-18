@@ -17,7 +17,7 @@ from convintel.config import Settings, get_settings
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 if TYPE_CHECKING:
-    from scripts.synth.schema import Draft, JudgeObservation, Sample, Scenario
+    from scripts.synth.schema import Draft, JudgeObservation, Sample, Scenario, SkeletonDraft
 
 
 @pytest.fixture(autouse=True)
@@ -74,6 +74,24 @@ def draft_factory() -> Callable[[Scenario], Draft]:
                     text=text,
                 )
                 for i, text in enumerate(texts)
+            ]
+        )
+
+    return factory
+
+
+@pytest.fixture
+def skeleton_draft(
+    draft_factory: Callable[[Scenario], Draft],
+) -> Callable[[Scenario], SkeletonDraft]:
+    """The same valid dialogue in the per-turn shape the v3 generator returns."""
+    from scripts.synth.schema import IndexedDraftTurn, SkeletonDraft
+
+    def factory(scenario: Scenario) -> SkeletonDraft:
+        return SkeletonDraft(
+            turns=[
+                IndexedDraftTurn(turn_index=index, speaker=turn.speaker, text=turn.text)
+                for index, turn in enumerate(draft_factory(scenario).turns)
             ]
         )
 
@@ -157,7 +175,7 @@ def sample_factory(
                 provenance=GenerationProvenance(
                     model_id="ollama:qwen3:8b",
                     model_revision="test",
-                    prompt_version="synthetic/v2",
+                    prompt_version="synthetic/v3",
                     prompt_sha256="a" * 64,
                     environment_sha256="b" * 64,
                     temperature=0.35,

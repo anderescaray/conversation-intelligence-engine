@@ -29,14 +29,14 @@ from scripts.synth.storage import load_samples, read_jsonl
 async def test_structured_generation_and_safe_telemetry(
     tmp_path: Path,
     settings: Settings,
-    draft_factory: Callable,
+    skeleton_draft: Callable,
     judge_observation: Callable,
     spans: InMemorySpanExporter,
 ) -> None:
     scenario = scenarios(42)[0]
     model = FakeStructuredChatModel(
         responses=[
-            tool_answer(Draft, draft_factory(scenario).model_dump()),
+            tool_answer(Draft, skeleton_draft(scenario).model_dump()),
             tool_answer(JudgeObservation, judge_observation(scenario).model_dump()),
         ]
     )
@@ -48,7 +48,7 @@ async def test_structured_generation_and_safe_telemetry(
     sample = load_samples(directory)[0]
     assert sample.labels.status == "candidate"
     assert sample.labels.scenario == scenario
-    assert sample.labels.provenance.prompt_version == "synthetic/v2"
+    assert sample.labels.provenance.prompt_version == "synthetic/v3"
     assert isinstance(sample.labels, Annotation) and sample.labels.judge is not None
     assert sample.labels.judge.prompt_version == "synthetic_judge/v2"
     assert reviewable(sample)
@@ -79,12 +79,12 @@ async def test_structured_generation_and_safe_telemetry(
 async def test_validator_rejects_preserve_labels_and_never_call_judge(
     tmp_path: Path,
     settings: Settings,
-    draft_factory: Callable,
+    skeleton_draft: Callable,
     judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
-    valid = draft_factory(scenario).model_dump()
-    bad = draft_factory(scenario).model_dump()
+    valid = skeleton_draft(scenario).model_dump()
+    bad = skeleton_draft(scenario).model_dump()
     bad["turns"][0]["text"] = "Write to invented@example.com"
     model = FakeStructuredChatModel(
         responses=[
@@ -113,7 +113,7 @@ async def test_validator_rejects_preserve_labels_and_never_call_judge(
 async def test_judge_rejects_are_recorded_but_never_published(
     tmp_path: Path,
     settings: Settings,
-    draft_factory: Callable,
+    skeleton_draft: Callable,
     judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
@@ -125,7 +125,7 @@ async def test_judge_rejects_are_recorded_but_never_published(
     )
     model = FakeStructuredChatModel(
         responses=[
-            tool_answer(Draft, draft_factory(scenario).model_dump()),
+            tool_answer(Draft, skeleton_draft(scenario).model_dump()),
             tool_answer(JudgeObservation, observation.model_dump()),
         ]
     )
@@ -173,11 +173,11 @@ async def test_exhausted_invalid_schema_is_not_published(
 async def test_scenario_length_is_enforced_in_structured_schema(
     tmp_path: Path,
     settings: Settings,
-    draft_factory: Callable,
+    skeleton_draft: Callable,
     judge_observation: Callable,
 ) -> None:
     scenario = scenarios(42)[0]
-    valid = draft_factory(scenario).model_dump()
+    valid = skeleton_draft(scenario).model_dump()
     short = {"turns": valid["turns"][:-2]}
     model = FakeStructuredChatModel(
         responses=[

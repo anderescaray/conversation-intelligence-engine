@@ -43,7 +43,7 @@ def run_spec(client: LLMClient) -> RunSpec:
         model_revision="test",
         judge_model_id=client.model_id,
         judge_model_revision="test",
-        prompt_sha256=digest(load_prompt("synthetic", 2)),
+        prompt_sha256=digest(load_prompt("synthetic", 3)),
         judge_prompt_sha256=digest(load_prompt("synthetic_judge", JUDGE_PROMPT_VERSION)),
         environment_sha256="b" * 64,
         pii_scan="patterns",
@@ -329,7 +329,7 @@ def test_historical_candidates_remain_readable_but_ineligible() -> None:
 
 
 def test_ollama_clients_disable_reasoning_without_network(settings: Settings) -> None:
-    generator = configured_client(settings, "synthetic", 2)
+    generator = configured_client(settings, "synthetic", 3)
     judge = configured_client(settings, "synthetic_judge", JUDGE_PROMPT_VERSION)
     assert generator.model_id == judge.model_id == "ollama:qwen3:8b"
     assert generator._chat_model is not None and judge._chat_model is not None

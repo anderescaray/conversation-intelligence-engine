@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, create_model, mod
 
 from convintel.contracts import Conversation, PIIEntity, Sentiment
 
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 EntityType = Literal[
     "PERSON", "CREDIT_CARD", "IBAN_CODE", "PHONE_NUMBER", "EMAIL_ADDRESS", "ACCOUNT_NUMBER"
 ]
@@ -109,6 +109,74 @@ def draft_schema(scenario: Scenario) -> type[Draft]:
     )
 
 
+_ENTITY_NAMES: dict[str, str] = {
+    "PERSON": "full name",
+    "CREDIT_CARD": "card number",
+    "IBAN_CODE": "IBAN",
+    "PHONE_NUMBER": "phone number",
+    "EMAIL_ADDRESS": "email address",
+    "ACCOUNT_NUMBER": "account number",
+}
+
+
+class SkeletonTurn(Record):
+    """One turn fixed by code; the model only writes its text."""
+
+    turn_index: int = Field(ge=0, lt=10)
+    speaker: Literal["customer", "agent"]
+    placeholders: tuple[str, ...]
+    cues: tuple[str, ...]
+
+
+def skeleton(scenario: Scenario) -> tuple[SkeletonTurn, ...]:
+    count = 2 * scenario.customer_turns
+    turns: list[SkeletonTurn] = []
+    for index in range(count):
+        cues: list[str] = []
+        if index == 0:
+            cues.append(f"first customer turn: customer sounds {scenario.start_sentiment.value}")
+        if index == count - 2:
+            cues.append(f"last customer turn: customer sounds {scenario.end_sentiment.value}")
+        slots = [slot for slot in scenario.slots if slot.turn_index == index]
+        for slot in slots:
+            name = _ENTITY_NAMES[slot.entity_type]
+            if slot.exposure == "full":
+                cues.append(f"customer gives their {name} as {slot.token}")
+            else:
+                cues.append(f"agent confirms only the last four digits of the {name}: {slot.token}")
+        turns.append(
+            SkeletonTurn(
+                turn_index=index,
+                speaker="customer" if index % 2 == 0 else "agent",
+                placeholders=tuple(slot.token for slot in slots),
+                cues=tuple(cues),
+            )
+        )
+    return tuple(turns)
+
+
+class IndexedDraftTurn(Record):
+    turn_index: int = Field(ge=0, lt=10)
+    speaker: Literal["customer", "agent"]
+    text: str = Field(min_length=1, max_length=1000)
+
+
+class SkeletonDraft(Record):
+    turns: list[IndexedDraftTurn] = Field(min_length=6, max_length=10)
+
+    def as_draft(self) -> Draft:
+        return Draft(turns=[DraftTurn(speaker=t.speaker, text=t.text) for t in self.turns])
+
+
+def skeleton_draft_schema(scenario: Scenario) -> type[SkeletonDraft]:
+    count = 2 * scenario.customer_turns
+    return create_model(
+        "Draft",
+        __base__=SkeletonDraft,
+        turns=(list[IndexedDraftTurn], Field(min_length=count, max_length=count)),
+    )
+
+
 class PIIValue(Record):
     slot: Placement | Slot
     canonical_value: str
@@ -140,8 +208,9 @@ class Provenance(Record):
 
 
 class GenerationProvenance(Provenance):
-    schema_version: str = "2"
+    schema_version: str = "3"
     reasoning: bool | None = None
+    repaired: bool = False
 
 
 class LabelCheck(Record):
@@ -345,6 +414,26 @@ class Sample(Record):
         return self
 
 
+class PhaseUsage(Record):
+    """Time, tokens and cost of one phase. Cost is None when a paid call's usage is unknown."""
+
+    seconds: float = Field(default=0, ge=0)
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    cost_usd: float | None = 0
+
+
+def add_usage(*parts: PhaseUsage) -> PhaseUsage:
+    return PhaseUsage(
+        seconds=sum(p.seconds for p in parts),
+        input_tokens=sum(p.input_tokens for p in parts),
+        output_tokens=sum(p.output_tokens for p in parts),
+        cost_usd=None
+        if any(p.cost_usd is None for p in parts)
+        else sum(p.cost_usd or 0 for p in parts),
+    )
+
+
 class Attempt(Record):
     id: str
     attempt: int
@@ -357,6 +446,9 @@ class Attempt(Record):
     input_tokens: int
     output_tokens: int
     cost_usd: float | None
+    repaired: bool = False
+    generation_usage: PhaseUsage | None = None
+    judge_usage: PhaseUsage | None = None
 
 
 class RunSpec(Record):
@@ -375,6 +467,8 @@ class RunSpec(Record):
 
 
 class Report(Record):
+    model_id: str | None = None
+    judge_model_id: str | None = None
     target: int
     candidates: int
     human_approved: int = 0
@@ -400,6 +494,11 @@ class Report(Record):
     sample_elapsed_s: dict[str, float]
     timed_out_ids: list[str]
     missing_indices: list[int]
+    repairs: int = 0
+    repairs_fixed: int = 0
+    phase_totals: dict[str, PhaseUsage] = Field(default_factory=dict[str, PhaseUsage])
+    phase_mean_per_scenario: dict[str, PhaseUsage] = Field(default_factory=dict[str, PhaseUsage])
+    phase_per_admitted: dict[str, PhaseUsage] = Field(default_factory=dict[str, PhaseUsage])
 
 
 class ReviewEvent(Record):
