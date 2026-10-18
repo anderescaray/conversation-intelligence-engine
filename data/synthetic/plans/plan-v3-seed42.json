@@ -1,0 +1,133 @@
+{
+  "plan": "synth-v3",
+  "seed": 42,
+  "size": 150,
+  "by_channel": {
+    "chat": 100,
+    "voice": 50
+  },
+  "by_intent_kind": {
+    "request": 36,
+    "problem": 72,
+    "info": 42
+  },
+  "by_pii_family": {
+    "general": 34,
+    "topup": 6,
+    "account": 22,
+    "bank": 23,
+    "card": 65
+  },
+  "intents_covered": 77,
+  "no_pii_controls": 30,
+  "full_pii_by_type": {
+    "EMAIL_ADDRESS": 45,
+    "IBAN_CODE": 26,
+    "ACCOUNT_NUMBER": 34,
+    "PERSON": 45,
+    "CREDIT_CARD": 45,
+    "PHONE_NUMBER": 45
+  },
+  "full_pii_by_type_and_channel": {
+    "ACCOUNT_NUMBER": {
+      "chat": 23,
+      "voice": 11
+    },
+    "CREDIT_CARD": {
+      "chat": 29,
+      "voice": 16
+    },
+    "EMAIL_ADDRESS": {
+      "chat": 35,
+      "voice": 10
+    },
+    "IBAN_CODE": {
+      "chat": 19,
+      "voice": 7
+    },
+    "PERSON": {
+      "chat": 26,
+      "voice": 19
+    },
+    "PHONE_NUMBER": {
+      "chat": 28,
+      "voice": 17
+    }
+  },
+  "last_four_by_type": {
+    "IBAN_CODE": 5,
+    "CREDIT_CARD": 13,
+    "PHONE_NUMBER": 7,
+    "ACCOUNT_NUMBER": 5
+  },
+  "by_resolved": {
+    "false": 75,
+    "true": 75
+  },
+  "escalation_by_kind": {
+    "request": 7,
+    "problem": 23
+  },
+  "escalation_by_channel": {
+    "chat": 20,
+    "voice": 10
+  },
+  "start_by_kind": {
+    "info": {
+      "neutral": 38,
+      "positive": 4
+    },
+    "problem": {
+      "negative": 56,
+      "neutral": 16
+    },
+    "request": {
+      "negative": 17,
+      "neutral": 16,
+      "positive": 3
+    }
+  },
+  "end_by_kind_and_resolved": {
+    "info:resolved=False": {
+      "negative": 6,
+      "neutral": 12,
+      "positive": 3
+    },
+    "info:resolved=True": {
+      "neutral": 12,
+      "positive": 9
+    },
+    "problem:resolved=False": {
+      "negative": 31,
+      "neutral": 4
+    },
+    "problem:resolved=True": {
+      "neutral": 7,
+      "positive": 30
+    },
+    "request:resolved=False": {
+      "negative": 10,
+      "neutral": 9
+    },
+    "request:resolved=True": {
+      "neutral": 4,
+      "positive": 13
+    }
+  },
+  "sentiment_pairs": {
+    "neutral->negative": 17,
+    "negative->negative": 29,
+    "neutral->positive": 23,
+    "neutral->neutral": 30,
+    "positive->positive": 1,
+    "negative->neutral": 13,
+    "negative->positive": 31,
+    "positive->negative": 1,
+    "positive->neutral": 5
+  },
+  "rare_positive_unresolved": 3,
+  "customer_turns": {
+    "3": 73,
+    "4": 77
+  }
+}

@@ -64,14 +64,14 @@ def with_extra(draft: SkeletonDraft, index: int, token: str) -> SkeletonDraft:
 
 
 def test_skeleton_fixes_speakers_placeholders_and_cues() -> None:
-    scenario = scenarios(42)[9]
+    scenario = scenarios(42)[31]
     plan = skeleton(scenario)
     assert len(plan) == 2 * scenario.customer_turns
     assert [turn.speaker for turn in plan] == ["customer", "agent"] * scenario.customer_turns
     assert [turn.placeholders for turn in plan[:4]] == [
         ("[[PHONE_NUMBER_1]]",),
         ("[[PHONE_NUMBER_LAST_FOUR_1]]",),
-        ("[[EMAIL_ADDRESS_1]]",),
+        ("[[CREDIT_CARD_1]]",),
         (),
     ]
     assert "last four digits" in plan[1].cues[0]
@@ -85,10 +85,10 @@ def test_skeleton_errors_name_every_concrete_mismatch(skeleton_draft: Callable) 
     plan = skeleton(scenario)
     valid = skeleton_draft(scenario)
     assert skeleton_errors(valid, plan) == []
-    moved = moved_token(valid, "[[CREDIT_CARD_1]]", 1)
+    moved = moved_token(valid, "[[EMAIL_ADDRESS_1]]", 1)
     assert skeleton_errors(moved, plan) == [
-        "turn 0 (customer) must contain [[CREDIT_CARD_1]] exactly once; found 0",
-        "turn 1 (agent) must not contain [[CREDIT_CARD_1]]",
+        "turn 0 (customer) must contain [[EMAIL_ADDRESS_1]] exactly once; found 0",
+        "turn 1 (agent) must not contain [[EMAIL_ADDRESS_1]]",
     ]
     turns = list(valid.turns)
     turns[2] = turns[2].model_copy(update={"text": turns[2].text + " [[IBAN_CODE_1]]"})
@@ -99,7 +99,7 @@ def test_skeleton_errors_name_every_concrete_mismatch(skeleton_draft: Callable) 
         "turn 4 must be spoken by the customer",
         "entry 5 must have turn_index 5",
         "turn 5 must be spoken by the agent",
-        "turn 5 (agent) must not contain [[CREDIT_CARD_1]]",
+        "turn 5 (agent) must not contain [[EMAIL_ADDRESS_1]]",
     ]
     longer = skeleton(scenarios(42)[2])
     assert skeleton_errors(valid, longer)[0] == "expected exactly 8 turns, got 6"
@@ -131,6 +131,7 @@ async def test_one_repair_with_concrete_errors_then_judge(
         n=1,
         model_revision="test",
         max_attempts=1,
+        max_rerolls=0,
     )
     assert result.candidates == 1 and result.missing_indices == []
     assert (result.repairs, result.repairs_fixed) == (1, 1)
@@ -164,6 +165,7 @@ async def test_failed_repair_rejects_without_judging(
         n=1,
         model_revision="test",
         max_attempts=1,
+        max_rerolls=0,
     )
     assert (result.repairs, result.repairs_fixed) == (1, 0)
     attempt = read_jsonl(directory / "attempts.jsonl", Attempt)[0]
@@ -233,7 +235,7 @@ async def test_judge_is_independent_of_generator_and_costs_are_split(
         judge_model_revision="haiku-snapshot",
     )
     run = RunSpec.model_validate_json((directory / "run.json").read_text())
-    assert run.model_id == "ollama:qwen3:8b" and run.generator_version == VERSION == "3.0.0"
+    assert run.model_id == "ollama:qwen3:8b" and run.generator_version == VERSION == "3.1.0"
     assert (run.judge_model_id, run.judge_model_revision) == (
         "anthropic:claude-haiku-4-5",
         "haiku-snapshot",

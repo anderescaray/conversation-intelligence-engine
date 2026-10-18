@@ -21,7 +21,7 @@ from convintel.telemetry import setup, traced
 from .judge import JUDGE_PROMPT_VERSION, configured_client, judge_sample, reviewable
 from .pii import insert_pii
 from .review import decision
-from .scenarios import scenarios
+from .scenarios import MAX_REROLLS, reroll, scenarios
 from .schema import (
     VERSION,
     Annotation,
@@ -34,7 +34,9 @@ from .schema import (
     RunSpec,
     Sample,
     Scenario,
+    ScenarioV3,
     SkeletonDraft,
+    StratumStats,
     add_usage,
     skeleton,
     skeleton_draft_schema,
@@ -223,9 +225,56 @@ def scaled(total: PhaseUsage, count: int) -> PhaseUsage:
     )
 
 
+def strata(scenario: ScenarioV3) -> dict[str, str]:
+    """Dimensions along which rejections are reported, to expose survivorship bias."""
+    return {
+        "channel": scenario.channel,
+        "intent_kind": scenario.intent_kind,
+        "pii_family": scenario.pii_family,
+        "resolved": str(scenario.resolved).lower(),
+        "escalation_requested": str(scenario.escalation_requested).lower(),
+        "sentiment": f"{scenario.start_sentiment.value}->{scenario.end_sentiment.value}",
+        "pii": "with" if scenario.slots else "without",
+        "customer_turns": str(scenario.customer_turns),
+        "reroll": str(scenario.reroll),
+    }
+
+
+def stratum_report(
+    attempts: list[Attempt], plan: Sequence[ScenarioV3], exhausted: set[str]
+) -> dict[str, dict[str, StratumStats]]:
+    by_id = {scenario.id: scenario for scenario in plan}
+    rows: dict[str, dict[str, list[tuple[Attempt, str]]]] = {}
+    for attempt in attempts:
+        if attempt.id not in by_id:
+            continue
+        for dimension, value in strata(reroll(by_id[attempt.id], attempt.reroll)).items():
+            rows.setdefault(dimension, {}).setdefault(value, []).append((attempt, attempt.id))
+    return {
+        dimension: {
+            value: StratumStats(
+                attempts=len(entries),
+                rejected=sum(not a.accepted for a, _ in entries),
+                reject_rate=sum(not a.accepted for a, _ in entries) / len(entries),
+                scenarios=len({i for _, i in entries}),
+                exhausted=len({i for _, i in entries} & exhausted),
+            )
+            for value, entries in sorted(values.items())
+        }
+        for dimension, values in rows.items()
+    }
+
+
 def report(
-    samples: list[Sample], attempts: list[Attempt], target: int, run: RunSpec | None = None
+    samples: list[Sample],
+    attempts: list[Attempt],
+    target: int,
+    run: RunSpec | None = None,
+    *,
+    plan: Sequence[ScenarioV3] = (),
+    exhausted: set[str] | None = None,
 ) -> Report:
+    exhausted = exhausted or set()
     accepted = [a for a in attempts if a.accepted]
     rejected = [a for a in attempts if not a.accepted]
     elapsed = sum(a.elapsed_s for a in attempts)
@@ -289,6 +338,13 @@ def report(
         phase_per_admitted={phase: scaled(total, len(samples)) for phase, total in totals.items()}
         if samples
         else {},
+        rerolled_ids=sorted({a.id for a in attempts if a.reroll > 0}),
+        unfilled_indices=sorted(s.index for s in plan if s.id in exhausted),
+        rejections_by_stratum=stratum_report(attempts, plan, exhausted),
+        admitted_free_attributes={
+            attribute: dict(Counter(str(getattr(s.labels.scenario, attribute, 0)) for s in samples))
+            for attribute in ("persona", "verbosity", "noise", "customer_turns", "reroll")
+        },
     )
 
 
@@ -318,6 +374,81 @@ def save_exports(directory: Path, samples: list[Sample], result: Report) -> None
     write_json(directory / "report.json", result)
 
 
+async def run_attempt(
+    client: LLMClient,
+    judge_client: LLMClient,
+    scenario: ScenarioV3,
+    run: RunSpec,
+    number: int,
+    scanner: NameScanner | None,
+    *,
+    deadline: float,
+    previous: Sequence[Sample],
+) -> tuple[Attempt, Sample | None]:
+    """One generation+judge attempt under the slot deadline, with its full accounting."""
+    model_ids = {client.model_id, judge_client.model_id}
+    before = {model: usage(model) for model in model_ids}
+    start = time.perf_counter()
+    candidate: Sample | None = None
+    progress = Progress()
+    reason = "accepted"
+    category: Literal["accepted", "validator", "judge", "timeout", "llm"] = "accepted"
+    try:
+        async with asyncio.timeout_at(deadline):
+            candidate = await generate_sample(
+                client,
+                scenario,
+                run,
+                number,
+                scanner,
+                judge_client=judge_client,
+                previous=previous,
+                progress=progress,
+            )
+    except TimeoutError:
+        reason, category = "sample_timeout", "timeout"
+    except Rejected as exc:
+        reason, category, progress.judge = str(exc), exc.category, exc.judge
+    except LLMError as exc:
+        if isinstance(exc.__cause__, TimeoutError):
+            reason, category = "sample_timeout", "timeout"
+        else:
+            reason, category = "llm_error", "llm"
+    elapsed = time.perf_counter() - start
+    tokens_in = tokens_out = 0
+    costs: list[float | None] = []
+    for model_id in model_ids:
+        after = usage(model_id)
+        delta_in, delta_out = (after[i] - before[model_id][i] for i in (0, 1))
+        tokens_in += delta_in
+        tokens_out += delta_out
+        provider, model = model_id.split(":", 1)
+        costs.append(compute_cost(cast(LLMProvider, provider), model, delta_in, delta_out))
+    incomplete_paid = category in {"timeout", "llm"} and any(
+        not m.startswith("ollama:") for m in model_ids
+    )
+    record = Attempt(
+        id=scenario.id,
+        attempt=number,
+        accepted=candidate is not None,
+        reason=reason,
+        category=category,
+        phase=progress.phase,
+        judge=progress.judge,
+        repaired=progress.repaired,
+        reroll=scenario.reroll,
+        generation_usage=progress.usage.get("generation"),
+        judge_usage=progress.usage.get("judge"),
+        elapsed_s=elapsed,
+        input_tokens=tokens_in,
+        output_tokens=tokens_out,
+        cost_usd=None
+        if incomplete_paid or any(c is None for c in costs)
+        else sum(c or 0 for c in costs),
+    )
+    return record, candidate
+
+
 async def generate_run(
     directory: Path,
     client: LLMClient,
@@ -335,7 +466,11 @@ async def generate_run(
     sample_timeout_s: float = 120,
     reasoning: bool | None = None,
     judge_model_revision: str | None = None,
+    max_cost_usd: float | None = None,
+    max_rerolls: int = MAX_REROLLS,
 ) -> Report:
+    if max_cost_usd is not None and max_cost_usd <= 0:
+        raise ConvIntelError("--max-cost-usd must be positive")
     if not 1 <= n <= 150 or max_attempts < 1 or seed < 0 or not 0 < sample_timeout_s <= 120:
         raise ConvIntelError(
             "Need n in [1,150], positive attempts, nonnegative seed and timeout in (0,120]"
@@ -358,6 +493,7 @@ async def generate_run(
         pii_scan="patterns+ner" if scanner else "patterns",
         sample_timeout_s=sample_timeout_s,
         reasoning=reasoning,
+        max_rerolls=max_rerolls,
     )
     samples, attempts = await asyncio.to_thread(prepare_run, directory, run, resume)
     if any(sample.labels.scenario.index >= n for sample in samples):
@@ -374,80 +510,49 @@ async def generate_run(
     if regenerate and (not resume or not regenerate <= rejected):
         raise ConvIntelError("Regeneration requires --resume and explicitly human-rejected indices")
     existing = {sample.conversation.id for sample in samples}
-    model_ids = {client.model_id, judge_client.model_id}
-    for scenario in scenarios(seed)[:n]:
-        replacing = scenario.index in regenerate
-        previous_attempts = [a for a in attempts if a.id == scenario.id]
-        if scenario.id in existing and not replacing:
+    plan = scenarios(seed)[:n]
+    spent: float | None = 0.0
+    stopped: Literal["max_cost"] | None = None
+    exhausted: set[str] = set()
+    for base in plan:
+        replacing = base.index in regenerate
+        previous_attempts = [a for a in attempts if a.id == base.id]
+        if base.id in existing and not replacing:
             continue
         if not replacing and any(a.category == "timeout" for a in previous_attempts):
             continue
         consumed = 0 if replacing else sum(a.elapsed_s for a in previous_attempts)
         deadline = asyncio.get_running_loop().time() + max(0, sample_timeout_s - consumed)
-        already = len(previous_attempts)
-        limit = already + max_attempts if replacing else max_attempts
-        for attempt in range(already + 1, limit + 1):
-            before = {model: usage(model) for model in model_ids}
-            start = time.perf_counter()
-            candidate: Sample | None = None
-            progress = Progress()
-            reason = "accepted"
-            category: Literal["accepted", "validator", "judge", "timeout", "llm"] = "accepted"
-            try:
-                async with asyncio.timeout_at(deadline):
-                    candidate = await generate_sample(
-                        client,
-                        scenario,
-                        run,
-                        attempt,
-                        scanner,
-                        judge_client=judge_client,
-                        previous=[s for s in samples if s.conversation.id != scenario.id],
-                        progress=progress,
-                    )
-            except TimeoutError:
-                candidate = None
-                reason, category = "sample_timeout", "timeout"
-            except Rejected as exc:
-                candidate = None
-                reason, category, progress.judge = str(exc), exc.category, exc.judge
-            except LLMError as exc:
-                candidate = None
-                if isinstance(exc.__cause__, TimeoutError):
-                    reason, category = "sample_timeout", "timeout"
-                else:
-                    reason, category = "llm_error", "llm"
-            elapsed = time.perf_counter() - start
-            tokens_in = tokens_out = 0
-            costs: list[float | None] = []
-            for model_id in model_ids:
-                after = usage(model_id)
-                delta_in, delta_out = (after[i] - before[model_id][i] for i in (0, 1))
-                tokens_in += delta_in
-                tokens_out += delta_out
-                provider, model = model_id.split(":", 1)
-                costs.append(compute_cost(cast(LLMProvider, provider), model, delta_in, delta_out))
-            incomplete_paid = category in {"timeout", "llm"} and any(
-                not m.startswith("ollama:") for m in model_ids
+        if replacing:
+            current = next(s.labels.scenario for s in samples if s.conversation.id == base.id)
+            level = current.reroll if isinstance(current, ScenarioV3) else 0
+            used = 0
+        else:
+            level = max((a.reroll for a in previous_attempts), default=0)
+            used = sum(a.reroll == level for a in previous_attempts)
+        number = len(previous_attempts)
+        while True:
+            if used >= max_attempts:
+                if level >= max_rerolls:
+                    exhausted.add(base.id)
+                    break
+                level, used = level + 1, 0
+            if max_cost_usd is not None and (spent is None or spent >= max_cost_usd):
+                stopped = "max_cost"
+                break
+            number, used = number + 1, used + 1
+            scenario = reroll(base, level)
+            record, candidate = await run_attempt(
+                client,
+                judge_client,
+                scenario,
+                run,
+                number,
+                scanner,
+                deadline=deadline,
+                previous=[s for s in samples if s.conversation.id != scenario.id],
             )
-            record = Attempt(
-                id=scenario.id,
-                attempt=attempt,
-                accepted=candidate is not None,
-                reason=reason,
-                category=category,
-                phase=progress.phase,
-                judge=progress.judge,
-                repaired=progress.repaired,
-                generation_usage=progress.usage.get("generation"),
-                judge_usage=progress.usage.get("judge"),
-                elapsed_s=elapsed,
-                input_tokens=tokens_in,
-                output_tokens=tokens_out,
-                cost_usd=None
-                if incomplete_paid or any(c is None for c in costs)
-                else sum(c or 0 for c in costs),
-            )
+            spent = None if spent is None or record.cost_usd is None else spent + record.cost_usd
             await asyncio.to_thread(append_jsonl, directory / "attempts.jsonl", record)
             attempts.append(record)
             if candidate is not None:
@@ -455,15 +560,18 @@ async def generate_run(
                 samples = [s for s in samples if s.conversation.id != scenario.id]
                 samples.append(candidate)
             print(record.model_dump_json(), flush=True)
-            if candidate is not None or category == "timeout":
+            if candidate is not None or record.category == "timeout":
                 break
+        if stopped:
+            break
     samples.sort(key=lambda sample: sample.labels.scenario.index)
-    result = report(samples, attempts, n, run).model_copy(
+    result = report(samples, attempts, n, run, plan=plan, exhausted=exhausted).model_copy(
         update={
+            "stopped_reason": stopped,
             "human_approved": sum(
                 (event := decision(s, events)) is not None and event.action == "approve"
                 for s in samples
-            )
+            ),
         }
     )
     await asyncio.to_thread(save_exports, directory, samples, result)
@@ -490,6 +598,12 @@ def main() -> int:
     parser.add_argument("--review-jsonl", type=Path)
     parser.add_argument("--max-attempts", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=120)
+    parser.add_argument(
+        "--max-cost-usd",
+        type=float,
+        help="Stop cleanly before the next attempt once this invocation has spent this much; "
+        "resume with --resume. Unknown paid usage also stops the run.",
+    )
     parser.add_argument("--ner-model")
     parser.add_argument("--trace", action="store_true")
     args = parser.parse_args()
@@ -521,6 +635,7 @@ def main() -> int:
                     judge_settings, "synthetic_judge", JUDGE_PROMPT_VERSION
                 ),
                 judge_model_revision=args.judge_model_revision,
+                max_cost_usd=args.max_cost_usd,
                 seed=args.seed,
                 n=args.n,
                 model_revision=args.model_revision,
@@ -536,7 +651,9 @@ def main() -> int:
     except ConvIntelError as exc:
         parser.exit(1, f"{type(exc).__name__}: {exc}\n")
     print(result.model_dump_json(indent=2))
-    return 1 if result.missing_indices else 0
+    if result.stopped_reason == "max_cost":
+        print("Stopped: --max-cost-usd reached; continue with --resume", flush=True)
+    return 1 if result.missing_indices or result.stopped_reason else 0
 
 
 if __name__ == "__main__":

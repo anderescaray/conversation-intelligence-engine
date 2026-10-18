@@ -1,11 +1,20 @@
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, create_model, model_validator
 
 from convintel.contracts import Conversation, PIIEntity, Sentiment
 
-VERSION = "3.0.0"
+from .plausibility import (
+    INTENT_KIND,
+    PII_FAMILY,
+    IntentKind,
+    PIIFamily,
+    allowed_pii,
+    label_violations,
+)
+
+VERSION = "3.1.0"
 EntityType = Literal[
     "PERSON", "CREDIT_CARD", "IBAN_CODE", "PHONE_NUMBER", "EMAIL_ADDRESS", "ACCOUNT_NUMBER"
 ]
@@ -28,7 +37,7 @@ class Placement(Slot):
 
 
 class ScenarioData[S: Slot](Record):
-    id: str = Field(pattern=r"^synth-v[12]-[0-9]+-[0-9]{3}$")
+    id: str = Field(pattern=r"^synth-v[123]-[0-9]+-[0-9]{3}$")
     index: int = Field(ge=0, lt=150)
     seed: int = Field(ge=0)
     sample_seed: int = Field(ge=0)
@@ -48,13 +57,16 @@ class LegacyScenario(ScenarioData[Slot]):
 
 
 class Scenario(ScenarioData[Placement]):
+    """Scenario plan v2 (generators 2.0 and 3.0); kept so their candidates stay readable."""
+
+    plan_prefix: ClassVar[str] = "synth-v2"
     intent_description: str = Field(min_length=1)
     start_sentiment: Sentiment
     end_sentiment: Sentiment
 
     @model_validator(mode="after")
     def validate_plan(self) -> "Scenario":
-        if self.id != f"synth-v2-{self.seed}-{self.index:03d}":
+        if self.id != f"{self.plan_prefix}-{self.seed}-{self.index:03d}":
             raise ValueError("scenario version or identity mismatch")
         if self.escalation_requested and self.start_sentiment != Sentiment.NEGATIVE:
             raise ValueError("escalation must start negative")
@@ -88,6 +100,41 @@ class Scenario(ScenarioData[Placement]):
                     not in {"CREDIT_CARD", "IBAN_CODE", "PHONE_NUMBER", "ACCOUNT_NUMBER"}
                 ):
                     raise ValueError("invalid partial confirmation")
+        return self
+
+
+class ScenarioV3(Scenario):
+    """Scenario plan v3: PII types and labels sampled only inside per-intent plausibility rules.
+
+    `reroll` > 0 marks a same-stratum replacement: labels, intent, channel and PII plan are kept,
+    only free attributes (persona, verbosity, noise, length, PII values) are redrawn.
+    """
+
+    plan_prefix: ClassVar[str] = "synth-v3"
+    plan_version: Literal[3] = 3
+    intent_kind: IntentKind
+    pii_family: PIIFamily
+    reroll: int = Field(default=0, ge=0, le=2)
+
+    @model_validator(mode="after")
+    def validate_plausibility(self) -> "ScenarioV3":
+        if (self.intent_kind, self.pii_family) != (
+            INTENT_KIND[self.intent],
+            PII_FAMILY[self.intent],
+        ):
+            raise ValueError("intent kind or PII family disagrees with the plausibility tables")
+        allowed = allowed_pii(self.intent)
+        if any(slot.entity_type not in allowed for slot in self.slots):
+            raise ValueError(f"PII type not plausible for {self.intent}")
+        errors = label_violations(
+            self.intent,
+            resolved=self.resolved,
+            escalation_requested=self.escalation_requested,
+            start=self.start_sentiment,
+            end=self.end_sentiment,
+        )
+        if errors:
+            raise ValueError("; ".join(errors))
         return self
 
 
@@ -358,7 +405,7 @@ class LegacyAnnotation(Record):
 class Annotation(Record):
     id: str
     status: Literal["candidate", "approved"] = "candidate"
-    scenario: Scenario
+    scenario: ScenarioV3 | Scenario
     pii_values: tuple[PIIValue, ...]
     pii_entities: tuple[PIISpan, ...]
     provenance: GenerationProvenance
@@ -447,6 +494,7 @@ class Attempt(Record):
     output_tokens: int
     cost_usd: float | None
     repaired: bool = False
+    reroll: int = Field(default=0, ge=0)
     generation_usage: PhaseUsage | None = None
     judge_usage: PhaseUsage | None = None
 
@@ -464,6 +512,15 @@ class RunSpec(Record):
     pii_scan: str
     sample_timeout_s: float = Field(default=120, gt=0, le=120)
     reasoning: bool | None = None
+    max_rerolls: int = Field(default=2, ge=0, le=2)
+
+
+class StratumStats(Record):
+    attempts: int
+    rejected: int
+    reject_rate: float
+    scenarios: int
+    exhausted: int
 
 
 class Report(Record):
@@ -499,6 +556,15 @@ class Report(Record):
     phase_totals: dict[str, PhaseUsage] = Field(default_factory=dict[str, PhaseUsage])
     phase_mean_per_scenario: dict[str, PhaseUsage] = Field(default_factory=dict[str, PhaseUsage])
     phase_per_admitted: dict[str, PhaseUsage] = Field(default_factory=dict[str, PhaseUsage])
+    rerolled_ids: list[str] = Field(default_factory=list[str])
+    unfilled_indices: list[int] = Field(default_factory=list[int])
+    rejections_by_stratum: dict[str, dict[str, StratumStats]] = Field(
+        default_factory=dict[str, dict[str, StratumStats]]
+    )
+    admitted_free_attributes: dict[str, dict[str, int]] = Field(
+        default_factory=dict[str, dict[str, int]]
+    )
+    stopped_reason: Literal["max_cost"] | None = None
 
 
 class ReviewEvent(Record):

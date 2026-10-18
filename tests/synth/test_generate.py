@@ -138,6 +138,7 @@ async def test_judge_rejects_are_recorded_but_never_published(
         n=1,
         model_revision="test",
         max_attempts=1,
+        max_rerolls=0,
     )
     assert result.candidates == 0
     assert result.rejection_rates == {"judge": 1.0}
@@ -163,6 +164,7 @@ async def test_exhausted_invalid_schema_is_not_published(
         seed=42,
         n=1,
         model_revision="test",
+        max_rerolls=0,
     )
     assert (result.candidates, result.rejects, result.input_tokens) == (0, 3, 600)
     assert result.missing_indices == [0]
@@ -194,6 +196,7 @@ async def test_scenario_length_is_enforced_in_structured_schema(
         n=1,
         model_revision="test",
         max_attempts=1,
+        max_rerolls=0,
     )
     assert (result.candidates, result.attempts, result.input_tokens) == (1, 1, 300)
     assert len(model.calls) == 3
@@ -214,6 +217,7 @@ async def test_unreported_paid_provider_usage_is_unknown(
         n=1,
         model_revision="test",
         max_attempts=1,
+        max_rerolls=0,
     )
     assert result.candidates == 0 and result.cost_usd is None
     assert result.rejection_categories == {"timeout": 1}

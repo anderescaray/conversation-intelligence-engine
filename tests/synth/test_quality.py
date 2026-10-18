@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from scripts.synth.pii import values_for
 from scripts.synth.scenarios import scenarios
-from scripts.synth.schema import DraftTurn, Scenario
+from scripts.synth.schema import DraftTurn, ScenarioV3
 from scripts.synth.validation import Rejected, validate_draft, validate_sample
 
 
@@ -28,7 +28,7 @@ def test_full_pii_cannot_be_planned_for_agent() -> None:
     data = scenarios(42)[1].model_dump()
     data["slots"][0].update({"speaker": "agent", "turn_index": 1})
     with pytest.raises(ValidationError, match="customer only"):
-        Scenario.model_validate(data)
+        ScenarioV3.model_validate(data)
 
 
 def test_partial_confirmations_are_derived_not_independently_sampled() -> None:

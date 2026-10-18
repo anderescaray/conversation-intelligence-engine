@@ -1,9 +1,25 @@
+import argparse
 import hashlib
 import random
+from collections import Counter
+from pathlib import Path
+from typing import cast
 
 from convintel.contracts import Sentiment
+from convintel.errors import ConvIntelError
 
-from .schema import EntityType, Placement, Scenario
+from .plausibility import (
+    END_WEIGHTS,
+    ESCALATION_KINDS,
+    INTENT_KIND,
+    LAST_FOUR_PII,
+    PII_FAMILY,
+    RARE_POSITIVE_KINDS,
+    START_WEIGHTS,
+    IntentKind,
+    allowed_pii,
+)
+from .schema import EntityType, Placement, Record, Scenario, ScenarioV3
 
 BANKING77_REVISION = "796a4623935746f71378f0ebd435635a8ce08e50"
 INTENT_DESCRIPTIONS = {
@@ -148,7 +164,8 @@ ENTITY_TYPES: tuple[EntityType, ...] = (
 )
 
 
-def scenarios(seed: int) -> tuple[Scenario, ...]:
+def legacy_scenarios(seed: int) -> tuple[Scenario, ...]:
+    """Scenario plan v2, used by generators 2.0 and 3.0; reproduces their stored candidates."""
     if seed < 0:
         raise ValueError("seed must be nonnegative")
     rng = random.Random(seed)
@@ -230,3 +247,244 @@ def scenarios(seed: int) -> tuple[Scenario, ...]:
             )
         )
     return tuple(result)
+
+
+PERSONAS = ("new to mobile banking", "experienced user", "busy customer")
+MAX_REROLLS = 2
+
+
+def sample_seed(seed: int, index: int, reroll: int = 0) -> int:
+    key = f"{seed}:{index}" if reroll == 0 else f"{seed}:{index}:reroll{reroll}"
+    return int.from_bytes(hashlib.sha256(key.encode()).digest()[:8])
+
+
+def free_attributes(seed: int) -> dict[str, object]:
+    """Attributes a same-stratum reroll may change; labels and PII plan are never among them."""
+    local = random.Random(seed)
+    return {
+        "customer_turns": local.randint(3, 4),
+        "persona": local.choice(PERSONAS),
+        "verbosity": local.choice(("brief", "moderate")),
+        "noise": local.choice(("none", "light")),
+    }
+
+
+def _weighted(rng: random.Random, weights: dict[Sentiment, int]) -> Sentiment:
+    options = list(weights)
+    return rng.choices(options, [weights[option] for option in options])[0]
+
+
+def _assign_pii(intents: list[str], rng: random.Random) -> dict[int, list[EntityType]]:
+    """Two plausible full PII types per non-control scenario, balancing counts across types.
+
+    Scenarios with the fewest plausible types choose first, so constrained intents are not left
+    with only over-represented types; ties are broken by the seeded generator.
+    """
+    indices = [index for index in range(len(intents)) if index % 5 != 0]
+    keys = {index: rng.random() for index in indices}
+    counts: Counter[str] = Counter()
+    chosen: dict[int, list[EntityType]] = {}
+    for index in sorted(indices, key=lambda i: (len(allowed_pii(intents[i])), keys[i])):
+        options = list(allowed_pii(intents[index]))
+        rng.shuffle(options)
+        options.sort(key=lambda name: counts[name])
+        pair: list[EntityType] = [cast(EntityType, name) for name in options[:2]]
+        rng.shuffle(pair)
+        counts.update(pair)
+        chosen[index] = pair
+    return chosen
+
+
+def scenarios(seed: int) -> tuple[ScenarioV3, ...]:
+    """Plan v3 for golden-v1: v2 channel and intent quotas with plausible labels and PII."""
+    if seed < 0:
+        raise ValueError("seed must be nonnegative")
+    rng = random.Random(seed)
+    intents = list(INTENTS)
+    rng.shuffle(intents)
+    chat = iter([*intents, *intents[:23]])
+    voice = iter(intents[23:73])
+    channels = ["voice" if index % 3 == 2 else "chat" for index in range(150)]
+    assigned = [next(voice if channel == "voice" else chat) for channel in channels]
+    kinds: list[IntentKind] = [INTENT_KIND[intent] for intent in assigned]
+    resolutions = [False, True] * 75
+    rng.shuffle(resolutions)
+    escalated: set[int] = set()
+    for channel, count in (("chat", 20), ("voice", 10)):
+        eligible = [
+            i for i in range(150) if channels[i] == channel and kinds[i] in ESCALATION_KINDS
+        ]
+        escalated.update(rng.sample(eligible, count))
+    rare_positive = set(
+        rng.sample(
+            [
+                i
+                for i in range(150)
+                if not resolutions[i] and i not in escalated and kinds[i] in RARE_POSITIVE_KINDS
+            ],
+            3,
+        )
+    )
+    pii = _assign_pii(assigned, rng)
+    confirmable = sorted(i for i, kinds_ in pii.items() if LAST_FOUR_PII & set(kinds_))
+    partial = {
+        index: rng.choice([kind for kind in pii[index] if kind in LAST_FOUR_PII])
+        for index in sorted(rng.sample(confirmable, 30))
+    }
+    result: list[ScenarioV3] = []
+    for index in range(150):
+        intent, resolved = assigned[index], resolutions[index]
+        kind: IntentKind = kinds[index]
+        labels = random.Random(f"{seed}:{index}:labels")
+        if index in escalated:
+            start = Sentiment.NEGATIVE
+            end = _weighted(labels, END_WEIGHTS[kind, True]) if resolved else Sentiment.NEGATIVE
+        elif index in rare_positive:
+            start, end = Sentiment.NEUTRAL, Sentiment.POSITIVE
+        else:
+            start = _weighted(labels, START_WEIGHTS[kind])
+            end = _weighted(labels, END_WEIGHTS[kind, resolved])
+        slots = [
+            Placement(
+                entity_type=entity,
+                token=f"[[{entity}_1]]",
+                turn_index=2 * position,
+                speaker="customer",
+            )
+            for position, entity in enumerate(pii.get(index, []))
+        ]
+        if index in partial:
+            source = next(slot for slot in slots if slot.entity_type == partial[index])
+            slots.append(
+                Placement(
+                    entity_type=source.entity_type,
+                    token=f"[[{source.entity_type}_LAST_FOUR_1]]",
+                    turn_index=source.turn_index + 1,
+                    speaker="agent",
+                    exposure="last_four",
+                    source_token=source.token,
+                )
+            )
+        seed_value = sample_seed(seed, index)
+        result.append(
+            ScenarioV3.model_validate(
+                {
+                    "id": f"synth-v3-{seed}-{index:03d}",
+                    "index": index,
+                    "seed": seed,
+                    "sample_seed": seed_value,
+                    "intent": intent,
+                    "intent_description": INTENT_DESCRIPTIONS[intent],
+                    "intent_kind": kind,
+                    "pii_family": PII_FAMILY[intent],
+                    "channel": channels[index],
+                    "start_sentiment": start,
+                    "end_sentiment": end,
+                    "resolved": resolved,
+                    "escalation_requested": index in escalated,
+                    "slots": tuple(sorted(slots, key=lambda slot: slot.turn_index)),
+                    **free_attributes(seed_value),
+                }
+            )
+        )
+    return tuple(result)
+
+
+def reroll(scenario: ScenarioV3, attempt: int) -> ScenarioV3:
+    """Same-stratum replacement: identical labels, intent, channel and PII plan."""
+    if not 0 <= attempt <= MAX_REROLLS:
+        raise ValueError(f"reroll must be within [0, {MAX_REROLLS}]")
+    seed_value = sample_seed(scenario.seed, scenario.index, attempt)
+    return ScenarioV3.model_validate(
+        {
+            **scenario.model_dump(),
+            **free_attributes(seed_value),
+            "sample_seed": seed_value,
+            "reroll": attempt,
+        }
+    )
+
+
+class PlanReport(Record):
+    plan: str = "synth-v3"
+    seed: int
+    size: int
+    by_channel: dict[str, int]
+    by_intent_kind: dict[str, int]
+    by_pii_family: dict[str, int]
+    intents_covered: int
+    no_pii_controls: int
+    full_pii_by_type: dict[str, int]
+    full_pii_by_type_and_channel: dict[str, dict[str, int]]
+    last_four_by_type: dict[str, int]
+    by_resolved: dict[str, int]
+    escalation_by_kind: dict[str, int]
+    escalation_by_channel: dict[str, int]
+    start_by_kind: dict[str, dict[str, int]]
+    end_by_kind_and_resolved: dict[str, dict[str, int]]
+    sentiment_pairs: dict[str, int]
+    rare_positive_unresolved: int
+    customer_turns: dict[str, int]
+
+
+def plan_report(plan: tuple[ScenarioV3, ...]) -> PlanReport:
+    def grouped(key: str, values: list[tuple[str, str]]) -> dict[str, dict[str, int]]:
+        table: dict[str, Counter[str]] = {}
+        for group, value in values:
+            table.setdefault(group, Counter())[value] += 1
+        return {group: dict(sorted(counter.items())) for group, counter in sorted(table.items())}
+
+    full = [(s, slot) for s in plan for slot in s.slots if slot.exposure == "full"]
+    return PlanReport(
+        seed=plan[0].seed,
+        size=len(plan),
+        by_channel=dict(Counter(s.channel for s in plan)),
+        by_intent_kind=dict(Counter(s.intent_kind for s in plan)),
+        by_pii_family=dict(Counter(s.pii_family for s in plan)),
+        intents_covered=len({s.intent for s in plan}),
+        no_pii_controls=sum(not s.slots for s in plan),
+        full_pii_by_type=dict(Counter(slot.entity_type for _, slot in full)),
+        full_pii_by_type_and_channel=grouped(
+            "type", [(slot.entity_type, s.channel) for s, slot in full]
+        ),
+        last_four_by_type=dict(
+            Counter(slot.entity_type for s in plan for slot in s.slots if slot.exposure != "full")
+        ),
+        by_resolved=dict(Counter(str(s.resolved).lower() for s in plan)),
+        escalation_by_kind=dict(Counter(s.intent_kind for s in plan if s.escalation_requested)),
+        escalation_by_channel=dict(Counter(s.channel for s in plan if s.escalation_requested)),
+        start_by_kind=grouped("kind", [(s.intent_kind, s.start_sentiment.value) for s in plan]),
+        end_by_kind_and_resolved=grouped(
+            "kind",
+            [(f"{s.intent_kind}:resolved={s.resolved}", s.end_sentiment.value) for s in plan],
+        ),
+        sentiment_pairs=dict(
+            Counter(f"{s.start_sentiment.value}->{s.end_sentiment.value}" for s in plan)
+        ),
+        rare_positive_unresolved=sum(
+            not s.resolved and not s.escalation_requested and s.end_sentiment == "positive"
+            for s in plan
+        ),
+        customer_turns=dict(Counter(str(s.customer_turns) for s in plan)),
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Write the scenario plan v3 distribution report")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    if args.output.exists():
+        parser.exit(1, "Output exists; plan reports are immutable\n")
+    try:
+        report = plan_report(scenarios(args.seed))
+    except (ValueError, ConvIntelError) as exc:
+        parser.exit(1, f"{exc}\n")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    print(report.model_dump_json(indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
