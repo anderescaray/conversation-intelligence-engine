@@ -10,7 +10,7 @@ instance is cached process-wide and shared by every caller.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProvider = Literal["anthropic", "ollama", "google", "openai"]
@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     twilio_account_sid: str | None = None
     twilio_auth_token: SecretStr | None = None
     twilio_phone_number: str | None = None
+
+    # Pipeline policy
+    intent_verifier_threshold: float | None = Field(default=None, ge=0, le=1)
 
 
 @lru_cache
