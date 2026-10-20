@@ -8,8 +8,17 @@ from typing import Literal
 from convintel.errors import ConvIntelError
 
 from .pii import TOKEN, value_key, values_for
-from .scenarios import INTENT_DESCRIPTIONS
-from .schema import Draft, JudgeRecord, Placement, Sample, Scenario, SkeletonDraft, SkeletonTurn
+from .schema import (
+    Draft,
+    JudgeRecord,
+    Placement,
+    Sample,
+    Scenario,
+    ScenarioV3,
+    SkeletonDraft,
+    SkeletonTurn,
+)
+from .taxonomy import DESCRIPTIONS, TaxonomyVersion
 
 NameScanner = Callable[[str], bool]
 _SUSPECT = re.compile(
@@ -43,6 +52,26 @@ def check_unfilled(text: str) -> None:
         raise Rejected("leftover_placeholder")
     if re.search(r"[\x00-\x08\x0b-\x1f\x7f]", text):
         raise Rejected("control_characters")
+
+
+def redact_unowned(text: str, scanner: NameScanner | None = None) -> str:
+    """Keep a rejected turn reviewable without persisting personal data the model invented.
+
+    Code-owned placeholders stay as markers; anything resembling PII outside them is replaced,
+    and a turn in which the name scanner still finds a person is withheld entirely.
+    """
+    parts = TOKEN.split(text)
+    tokens = TOKEN.findall(text)
+    redacted = [_SUSPECT.sub("[[UNOWNED_PII]]", part) for part in parts]
+    joined = "".join(
+        segment + (tokens[index] if index < len(tokens) else "")
+        for index, segment in enumerate(redacted)
+    )
+    if scanner is not None and scanner(
+        TOKEN.sub("redacted", joined.replace("[[UNOWNED_PII]]", ""))
+    ):
+        return "[[REDACTED_TURN]]"
+    return joined
 
 
 def check_unowned_pii(text: str, scanner: NameScanner | None = None) -> None:
@@ -87,7 +116,8 @@ def skeleton_errors(draft: SkeletonDraft, plan: Sequence[SkeletonTurn]) -> list[
 
 
 def validate_draft(draft: Draft, scenario: Scenario, scanner: NameScanner | None = None) -> None:
-    if INTENT_DESCRIPTIONS.get(scenario.intent) != scenario.intent_description:
+    taxonomy: TaxonomyVersion = scenario.taxonomy_version if isinstance(scenario, ScenarioV3) else 1
+    if DESCRIPTIONS[taxonomy].get(scenario.intent) != scenario.intent_description:
         raise Rejected("intent_description")
     if not 6 <= len(draft.turns) <= 10 or len(draft.turns) != 2 * scenario.customer_turns:
         raise Rejected("turn_count")

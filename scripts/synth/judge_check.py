@@ -20,7 +20,6 @@ from convintel.llm import LLMClient, load_prompt
 from convintel.telemetry import traced
 
 from .judge import JUDGE_PROMPT_VERSION, configured_client, evidence_errors, observe
-from .scenarios import INTENTS
 from .schema import (
     LABELS,
     VERSION,
@@ -32,9 +31,10 @@ from .schema import (
     compare,
 )
 from .storage import digest, file_hash, read_jsonl, write_json
+from .taxonomy import INTENTS
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONTROLS = ROOT / "tests/synth/judge_controls.jsonl"
+DEFAULT_CONTROLS = ROOT / "tests/synth/judge_controls_v2.jsonl"
 
 
 class Control(Record):

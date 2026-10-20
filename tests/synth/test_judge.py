@@ -18,6 +18,7 @@ from scripts.synth.judge import (
     reviewable,
 )
 from scripts.synth.judge_check import DEFAULT_CONTROLS, Control, load_controls, run_gate
+from scripts.synth.plausibility import INTENT_KIND
 from scripts.synth.review import review_batch
 from scripts.synth.scenarios import scenarios
 from scripts.synth.schema import (
@@ -43,7 +44,7 @@ def run_spec(client: LLMClient) -> RunSpec:
         model_revision="test",
         judge_model_id=client.model_id,
         judge_model_revision="test",
-        prompt_sha256=digest(load_prompt("synthetic", 3)),
+        prompt_sha256=digest(load_prompt("synthetic", 4)),
         judge_prompt_sha256=digest(load_prompt("synthetic_judge", JUDGE_PROMPT_VERSION)),
         environment_sha256="b" * 64,
         pii_scan="patterns",
@@ -81,11 +82,11 @@ async def test_blind_judge_never_sees_targets_or_pii_values(
         assert value.canonical_value not in prompt
         assert value.slot.token in prompt
     assert scenario.model_dump_json() not in prompt
-    assert "resolved=" not in prompt and 'start_sentiment": ' not in prompt
+    assert '"start_sentiment":' not in prompt and '"escalation_requested":' not in prompt
     assert TAXONOMY in prompt and "<conversation>" in prompt
     assert record.input_sha256 == digest(judge_input(sample))
     assert record.passed and record.mismatched_labels == ()
-    assert record.prompt_version == "synthetic_judge/v2"
+    assert record.prompt_version == "synthetic_judge/v3"
 
 
 @pytest.mark.parametrize("label", LABELS)
@@ -198,17 +199,17 @@ async def test_closed_intent_schema_rejects_invented_labels(settings: Settings) 
     client = LLMClient(settings, chat_model=model, sleep=no_sleep)
     report = await run_gate(client, DEFAULT_CONTROLS)
     assert report.results[0].error == "LLMError" and not report.results[0].ok
-    assert not report.gate_passed and report.passed_controls == "9/10"
-    assert report.field_correct["intent"] == "9/10"
+    assert not report.gate_passed and report.passed_controls == "21/22"
+    assert report.field_correct["intent"] == "21/22"
 
 
 def test_controls_break_exactly_one_label_and_use_masked_pii() -> None:
     controls = load_controls(DEFAULT_CONTROLS)
-    assert len(controls) == 10
-    assert sum(c.broken is None for c in controls) == 3
+    assert len(controls) == 22
+    assert sum(c.broken is None for c in controls) == 9
     broken = [c.broken for c in controls if c.broken]
     assert set(broken) == set(LABELS)
-    assert sum(c.targets.resolved is False for c in controls if c.broken == "resolved") == 1
+    assert sum(c.targets.resolved is False for c in controls if c.broken == "resolved") == 3
     assert {
         c.targets.escalation_requested for c in controls if c.broken == "escalation_requested"
     } == {True, False}
@@ -233,8 +234,8 @@ async def test_gate_passes_a_truthful_judge_and_reports_counts(
         responses=[tool_answer(JudgeObservation, truthful(c).model_dump()) for c in controls]
     )
     report = await run_gate(LLMClient(settings, chat_model=model), DEFAULT_CONTROLS)
-    assert report.gate_passed and report.passed_controls == "10/10"
-    assert report.field_correct == {label: "10/10" for label in LABELS}
+    assert report.gate_passed and report.passed_controls == "22/22"
+    assert report.field_correct == {label: "22/22" for label in LABELS}
     assert report.judge_model_id == "ollama:qwen3:8b" and report.cost_usd == 0
     assert {s.name for s in spans.get_finished_spans()} >= {
         "synthetic.judge",
@@ -264,8 +265,8 @@ async def test_gate_fails_a_judge_that_reads_false_targets_as_mismatches(
     assert not report.gate_passed
     failed = {r.id for r in report.results if not r.ok}
     assert "ctl-01-valid-resolved" in failed and "ctl-08-broken-escalation-false" not in failed
-    assert report.field_correct["escalation_requested"] == "2/10"
-    assert report.field_correct["intent"] == "10/10"
+    assert report.field_correct["escalation_requested"] == "4/22"
+    assert report.field_correct["intent"] == "22/22"
 
 
 def test_only_current_judge_passed_samples_reach_human_review(
@@ -329,7 +330,7 @@ def test_historical_candidates_remain_readable_but_ineligible() -> None:
 
 
 def test_ollama_clients_disable_reasoning_without_network(settings: Settings) -> None:
-    generator = configured_client(settings, "synthetic", 3)
+    generator = configured_client(settings, "synthetic", 4)
     judge = configured_client(settings, "synthetic_judge", JUDGE_PROMPT_VERSION)
     assert generator.model_id == judge.model_id == "ollama:qwen3:8b"
     assert generator._chat_model is not None and judge._chat_model is not None
@@ -350,3 +351,29 @@ def test_label_targets_reject_non_boolean_flags() -> None:
                 "end_sentiment": "neutral",
             }
         )
+
+
+def test_gate_v2_keeps_the_original_controls_and_covers_the_failure_patterns() -> None:
+    original = load_controls(DEFAULT_CONTROLS.parent / "judge_controls.jsonl")
+    controls = load_controls(DEFAULT_CONTROLS)
+    assert controls[:10] == original
+    new = {c.id: c for c in controls[10:]}
+    pairs = [
+        ("ctl-11-valid-calm-problem", "ctl-12-broken-calm-problem-start"),
+        ("ctl-13-valid-refund-processed", "ctl-14-broken-refund-processed"),
+        ("ctl-15-valid-obstacle", "ctl-16-broken-obstacle"),
+        ("ctl-17-valid-courtesy-close", "ctl-18-broken-courtesy-close"),
+        ("ctl-19-valid-card-top-up-fee", "ctl-20-broken-pin-of-new-card"),
+        ("ctl-21-valid-resolved-escalation", "ctl-22-broken-resolved-escalation"),
+    ]
+    assert set(new) == {name for pair in pairs for name in pair}
+    for valid, broken in pairs:
+        assert new[valid].broken is None and new[broken].broken is not None
+    calm = new["ctl-11-valid-calm-problem"]
+    assert INTENT_KIND[calm.truth.intent] == "problem" and calm.truth.start_sentiment == "neutral"
+    assert not new["ctl-15-valid-obstacle"].truth.resolved
+    escalation = new["ctl-21-valid-resolved-escalation"]
+    assert escalation.truth.resolved and escalation.truth.escalation_requested
+    assert (
+        "supervisor" in escalation.turns[3].text and "joined the chat" in escalation.turns[3].text
+    )

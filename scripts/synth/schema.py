@@ -14,8 +14,9 @@ from .plausibility import (
     allowed_pii,
     label_violations,
 )
+from .taxonomy import DESCRIPTIONS, TaxonomyVersion
 
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 EntityType = Literal[
     "PERSON", "CREDIT_CARD", "IBAN_CODE", "PHONE_NUMBER", "EMAIL_ADDRESS", "ACCOUNT_NUMBER"
 ]
@@ -117,6 +118,7 @@ class ScenarioV3(Scenario):
     """
 
     plan_version: PlanVersion
+    taxonomy_version: TaxonomyVersion = 1
     intent_kind: IntentKind
     pii_family: PIIFamily
     reroll: int = Field(default=0, ge=0, le=2)
@@ -128,6 +130,8 @@ class ScenarioV3(Scenario):
             PII_FAMILY[self.intent],
         ):
             raise ValueError("intent kind or PII family disagrees with the plausibility tables")
+        if self.intent_description != DESCRIPTIONS[self.taxonomy_version][self.intent]:
+            raise ValueError("intent description disagrees with its taxonomy version")
         allowed = allowed_pii(self.intent)
         if any(slot.entity_type not in allowed for slot in self.slots):
             raise ValueError(f"PII type not plausible for {self.intent}")
@@ -504,6 +508,7 @@ class Attempt(Record):
     cost_usd: float | None
     repaired: bool = False
     reroll: int = Field(default=0, ge=0)
+    masked_turns: tuple[DraftTurn, ...] | None = None
     generation_usage: PhaseUsage | None = None
     judge_usage: PhaseUsage | None = None
 
@@ -522,6 +527,7 @@ class RunSpec(Record):
     sample_timeout_s: float = Field(default=120, gt=0, le=120)
     reasoning: bool | None = None
     max_rerolls: int = Field(default=2, ge=0, le=2)
+    indices: list[int] | None = None
 
 
 class StratumStats(Record):

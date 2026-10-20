@@ -11,7 +11,6 @@ from convintel.llm import LLMClient, LLMResponse, build_chat_model, load_prompt,
 from convintel.llm.prompts import Prompt
 from convintel.telemetry import traced
 
-from .scenarios import INTENT_DESCRIPTIONS, INTENTS
 from .schema import (
     VERSION,
     Annotation,
@@ -26,11 +25,24 @@ from .schema import (
     targets_of,
 )
 from .storage import digest
+from .taxonomy import DESCRIPTIONS, INTENTS, TaxonomyVersion
 from .validation import Rejected, masked_turns
 
-JUDGE_PROMPT_VERSION = 2
-TAXONOMY = "\n".join(f"- {name}: {text}" for name, text in INTENT_DESCRIPTIONS.items())
-TAXONOMY_SHA256 = hashlib.sha256(TAXONOMY.encode()).hexdigest()
+JUDGE_PROMPT_VERSION = 3
+# Each judge prompt version is bound to the descriptions it was run with, so a stored verdict
+# stays verifiable after the taxonomy changes.
+JUDGE_TAXONOMY: dict[int, TaxonomyVersion] = {2: 1, 3: 2}
+
+
+def taxonomy_text(version: TaxonomyVersion) -> str:
+    return "\n".join(f"- {name}: {text}" for name, text in DESCRIPTIONS[version].items())
+
+
+def taxonomy_sha256(version: TaxonomyVersion) -> str:
+    return hashlib.sha256(taxonomy_text(version).encode()).hexdigest()
+
+
+TAXONOMY = taxonomy_text(JUDGE_TAXONOMY[JUDGE_PROMPT_VERSION])
 
 _IntentName = cast(Any, Literal).__getitem__(INTENTS)
 _ClosedIntent = create_model("ObservedIntent", __base__=ObservedIntent, value=(_IntentName, ...))
@@ -48,11 +60,17 @@ class JudgeInput(Record):
     turns: tuple[DraftTurn, ...]
 
 
-def judge_input(sample: Sample) -> JudgeInput:
+def prompt_number(prompt_version: str) -> int:
+    return int(prompt_version.rsplit("/v", 1)[1])
+
+
+def judge_input(sample: Sample, prompt_version: int = JUDGE_PROMPT_VERSION) -> JudgeInput:
     if not isinstance(sample.labels, Annotation):
         raise ConvIntelError("Historical samples cannot receive implicit judge approval")
+    if prompt_version not in JUDGE_TAXONOMY:
+        raise ConvIntelError(f"No taxonomy is bound to judge prompt v{prompt_version}")
     return JudgeInput(
-        taxonomy_sha256=TAXONOMY_SHA256,
+        taxonomy_sha256=taxonomy_sha256(JUDGE_TAXONOMY[prompt_version]),
         turns=tuple(
             DraftTurn(
                 speaker="customer" if turn.speaker == "customer" else "agent",
@@ -101,7 +119,8 @@ def reviewable(sample: Sample) -> bool:
         judge.passed
         and not compare(observation, targets_of(sample.labels.scenario))
         and not evidence_errors(observation, speakers)
-        and judge.input_sha256 == digest(judge_input(sample))
+        and prompt_number(judge.prompt_version) in JUDGE_TAXONOMY
+        and judge.input_sha256 == digest(judge_input(sample, prompt_number(judge.prompt_version)))
     )
 
 
@@ -119,7 +138,7 @@ async def observe(
             JudgeSchema,
             prompt,
             operator="synthetic_judge",
-            taxonomy=TAXONOMY,
+            taxonomy=taxonomy_text(JUDGE_TAXONOMY[prompt.version]),
             conversation=wrap_conversation(conversation),
         )
     observation = JudgeObservation.model_validate(response.output.model_dump())

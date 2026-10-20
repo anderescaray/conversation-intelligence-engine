@@ -9,7 +9,6 @@ from convintel.errors import ConvIntelError
 from convintel.telemetry import traced
 
 from .judge import reviewable
-from .scenarios import INTENTS
 from .schema import LABELS, VERSION, Annotation, Record, ReviewEvent, Sample, targets_of
 from .storage import (
     append_jsonl,
@@ -20,6 +19,7 @@ from .storage import (
     write_json,
     write_jsonl,
 )
+from .taxonomy import INTENTS
 from .validation import ensure_unique, validate_sample
 
 

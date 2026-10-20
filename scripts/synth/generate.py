@@ -18,7 +18,13 @@ from convintel.llm import LLMClient, load_prompt
 from convintel.llm.pricing import compute_cost
 from convintel.telemetry import setup, traced
 
-from .judge import JUDGE_PROMPT_VERSION, configured_client, judge_sample, reviewable
+from .judge import (
+    JUDGE_PROMPT_VERSION,
+    configured_client,
+    judge_input,
+    judge_sample,
+    reviewable,
+)
 from .pii import insert_pii
 from .review import decision
 from .scenarios import MAX_REROLLS, reroll, scenarios
@@ -26,6 +32,7 @@ from .schema import (
     VERSION,
     Annotation,
     Attempt,
+    DraftTurn,
     GenerationProvenance,
     JudgeRecord,
     PhaseUsage,
@@ -55,19 +62,21 @@ from .validation import (
     Rejected,
     ensure_unique,
     local_name_scanner,
+    redact_unowned,
     skeleton_errors,
     validate_draft,
     validate_sample,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-PROMPT_VERSION = 3
+PROMPT_VERSION = 4
 
 
 class Progress(BaseModel):
     phase: Literal["generation", "validation", "judge"] = "generation"
     judge: JudgeRecord | None = None
     repaired: bool = False
+    turns: tuple[DraftTurn, ...] | None = None
     usage: dict[str, PhaseUsage] = Field(default_factory=dict[str, PhaseUsage])
 
 
@@ -142,6 +151,7 @@ async def generate_sample(
             response = await client.structured(
                 schema, prompt, operator="synthetic", feedback="", **variables
             )
+            progress.turns = tuple(response.output.as_draft().turns)
             errors = skeleton_errors(response.output, plan)
             if errors:
                 progress.repaired = True
@@ -155,6 +165,7 @@ async def generate_sample(
                         feedback=repair_block(response.output, errors),
                         **variables,
                     )
+                    progress.turns = tuple(response.output.as_draft().turns)
                     repair_span.set_attribute(
                         "repair.fixed", not skeleton_errors(response.output, plan)
                     )
@@ -190,6 +201,7 @@ async def generate_sample(
             ),
         )
         sample = Sample(conversation=conversation, labels=labels)
+        progress.turns = judge_input(sample).turns
         with traced("synthetic.validate", version=VERSION):
             await asyncio.to_thread(validate_sample, sample, scanner)
             ensure_unique(sample, previous)
@@ -261,21 +273,32 @@ def strata(scenario: ScenarioV3) -> dict[str, str]:
 def stratum_report(
     attempts: list[Attempt], plan: Sequence[ScenarioV3], exhausted: set[str]
 ) -> dict[str, dict[str, StratumStats]]:
+    """Attempts count where they ran; each slot counts once, in its final attempt's stratum.
+
+    Rerolls can move a slot between values of free attributes (turns, reroll), so attributing
+    slots to their final attempt keeps `scenarios` and `exhausted` summing to the totals.
+    """
     by_id = {scenario.id: scenario for scenario in plan}
-    rows: dict[str, dict[str, list[tuple[Attempt, str]]]] = {}
+    rows: dict[str, dict[str, list[Attempt]]] = {}
+    final: dict[str, Attempt] = {}
     for attempt in attempts:
         if attempt.id not in by_id:
             continue
+        final[attempt.id] = attempt
         for dimension, value in strata(reroll(by_id[attempt.id], attempt.reroll)).items():
-            rows.setdefault(dimension, {}).setdefault(value, []).append((attempt, attempt.id))
+            rows.setdefault(dimension, {}).setdefault(value, []).append(attempt)
+    slots: dict[str, dict[str, set[str]]] = {}
+    for scenario_id, attempt in final.items():
+        for dimension, value in strata(reroll(by_id[scenario_id], attempt.reroll)).items():
+            slots.setdefault(dimension, {}).setdefault(value, set()).add(scenario_id)
     return {
         dimension: {
             value: StratumStats(
                 attempts=len(entries),
-                rejected=sum(not a.accepted for a, _ in entries),
-                reject_rate=sum(not a.accepted for a, _ in entries) / len(entries),
-                scenarios=len({i for _, i in entries}),
-                exhausted=len({i for _, i in entries} & exhausted),
+                rejected=sum(not a.accepted for a in entries),
+                reject_rate=sum(not a.accepted for a in entries) / len(entries),
+                scenarios=len(slots[dimension].get(value, set())),
+                exhausted=len(slots[dimension].get(value, set()) & exhausted),
             )
             for value, entries in sorted(values.items())
         }
@@ -291,6 +314,7 @@ def report(
     *,
     plan: Sequence[ScenarioV3] = (),
     exhausted: set[str] | None = None,
+    expected: Sequence[int] | None = None,
 ) -> Report:
     exhausted = exhausted or set()
     accepted = [a for a in attempts if a.accepted]
@@ -346,7 +370,10 @@ def report(
         ),
         sample_elapsed_s=sample_times,
         timed_out_ids=sorted({a.id for a in rejected if a.category == "timeout"}),
-        missing_indices=sorted(set(range(target)) - {s.labels.scenario.index for s in samples}),
+        missing_indices=sorted(
+            set(range(target) if expected is None else expected)
+            - {s.labels.scenario.index for s in samples}
+        ),
         repairs=sum(a.repaired for a in attempts),
         repairs_fixed=sum(a.repaired and a.phase != "generation" for a in attempts),
         phase_totals=totals,
@@ -455,6 +482,12 @@ async def run_attempt(
         judge=progress.judge,
         repaired=progress.repaired,
         reroll=scenario.reroll,
+        masked_turns=None
+        if candidate is not None or progress.turns is None
+        else tuple(
+            turn.model_copy(update={"text": redact_unowned(turn.text, scanner)})
+            for turn in progress.turns
+        ),
         generation_usage=progress.usage.get("generation"),
         judge_usage=progress.usage.get("judge"),
         elapsed_s=elapsed,
@@ -486,6 +519,8 @@ async def generate_run(
     judge_model_revision: str | None = None,
     max_cost_usd: float | None = None,
     max_rerolls: int = MAX_REROLLS,
+    indices: Sequence[int] | None = None,
+    dedup_against: Sequence[Sample] = (),
 ) -> Report:
     if max_cost_usd is not None and max_cost_usd <= 0:
         raise ConvIntelError("--max-cost-usd must be positive")
@@ -512,6 +547,7 @@ async def generate_run(
         sample_timeout_s=sample_timeout_s,
         reasoning=reasoning,
         max_rerolls=max_rerolls,
+        indices=sorted(set(indices)) if indices is not None else None,
     )
     samples, attempts = await asyncio.to_thread(prepare_run, directory, run, resume)
     if any(sample.labels.scenario.index >= n for sample in samples):
@@ -529,6 +565,10 @@ async def generate_run(
         raise ConvIntelError("Regeneration requires --resume and explicitly human-rejected indices")
     existing = {sample.conversation.id for sample in samples}
     plan = scenarios(seed)[:n]
+    if indices is not None:
+        if not indices or not set(indices) <= {s.index for s in plan}:
+            raise ConvIntelError("--indices must be a nonempty subset of the first n scenarios")
+        plan = tuple(s for s in plan if s.index in set(indices))
     spent: float | None = 0.0
     stopped: Literal["max_cost"] | None = None
     exhausted: set[str] = set()
@@ -573,7 +613,10 @@ async def generate_run(
                 number,
                 scanner,
                 deadline=deadline,
-                previous=[s for s in samples if s.conversation.id != scenario.id],
+                previous=[
+                    *(s for s in samples if s.conversation.id != scenario.id),
+                    *dedup_against,
+                ],
             )
             spent = None if spent is None or record.cost_usd is None else spent + record.cost_usd
             await asyncio.to_thread(append_jsonl, directory / "attempts.jsonl", record)
@@ -588,7 +631,15 @@ async def generate_run(
         if stopped:
             break
     samples.sort(key=lambda sample: sample.labels.scenario.index)
-    result = report(samples, attempts, n, run, plan=plan, exhausted=exhausted).model_copy(
+    result = report(
+        samples,
+        attempts,
+        n,
+        run,
+        plan=plan,
+        exhausted=exhausted,
+        expected=[s.index for s in plan],
+    ).model_copy(
         update={
             "systematic_failures": systematic,
             "stopped_reason": stopped,
@@ -629,6 +680,15 @@ def main() -> int:
         "resume with --resume. Unknown paid usage also stops the run.",
     )
     parser.add_argument("--ner-model")
+    parser.add_argument(
+        "--indices", help="Comma-separated scenario indices to generate (default: all of --n)"
+    )
+    parser.add_argument(
+        "--dedup-against",
+        type=Path,
+        action="append",
+        help="Candidate directory whose samples new ones must not duplicate",
+    )
     parser.add_argument("--trace", action="store_true")
     args = parser.parse_args()
     os.environ["OPENINFERENCE_HIDE_INPUTS"] = "true"
@@ -660,6 +720,12 @@ def main() -> int:
                 ),
                 judge_model_revision=args.judge_model_revision,
                 max_cost_usd=args.max_cost_usd,
+                indices=[int(i) for i in args.indices.split(",")] if args.indices else None,
+                dedup_against=[
+                    sample
+                    for directory in args.dedup_against or []
+                    for sample in load_samples(directory)
+                ],
                 seed=args.seed,
                 n=args.n,
                 model_revision=args.model_revision,

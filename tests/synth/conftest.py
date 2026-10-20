@@ -137,7 +137,7 @@ def with_judge(
         record = JudgeRecord(
             model_id="ollama:qwen3:8b",
             model_revision="test",
-            prompt_version="synthetic_judge/v2",
+            prompt_version="synthetic_judge/v3",
             prompt_sha256="c" * 64,
             input_sha256=digest(judge_input(sample)),
             temperature=0,
@@ -175,7 +175,7 @@ def sample_factory(
                 provenance=GenerationProvenance(
                     model_id="ollama:qwen3:8b",
                     model_revision="test",
-                    prompt_version="synthetic/v3",
+                    prompt_version="synthetic/v4",
                     prompt_sha256="a" * 64,
                     environment_sha256="b" * 64,
                     temperature=0.35,

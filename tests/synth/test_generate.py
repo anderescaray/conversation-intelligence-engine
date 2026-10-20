@@ -48,9 +48,9 @@ async def test_structured_generation_and_safe_telemetry(
     sample = load_samples(directory)[0]
     assert sample.labels.status == "candidate"
     assert sample.labels.scenario == scenario
-    assert sample.labels.provenance.prompt_version == "synthetic/v3"
+    assert sample.labels.provenance.prompt_version == "synthetic/v4"
     assert isinstance(sample.labels, Annotation) and sample.labels.judge is not None
-    assert sample.labels.judge.prompt_version == "synthetic_judge/v2"
+    assert sample.labels.judge.prompt_version == "synthetic_judge/v3"
     assert reviewable(sample)
     assert read_jsonl(directory / "conversations.jsonl", Conversation) == [sample.conversation]
     assert scenario.model_dump_json() in str(model.calls[0][1].content)

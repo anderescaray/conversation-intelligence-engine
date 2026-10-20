@@ -19,140 +19,13 @@ from .plausibility import (
     allowed_pii,
 )
 from .schema import EntityType, Placement, Record, Scenario, ScenarioV3
+from .taxonomy import (
+    DESCRIPTIONS,
+    INTENT_DESCRIPTIONS_V1,
+    INTENTS,
+    TaxonomyVersion,
+)
 
-BANKING77_REVISION = "796a4623935746f71378f0ebd435635a8ce08e50"
-INTENT_DESCRIPTIONS = {
-    "activate_my_card": "Activating a newly received bank card so it can be used.",
-    "age_limit": "The minimum age required to open or use a banking account.",
-    "apple_pay_or_google_pay": "Setting up or using a bank card with Apple Pay or Google Pay.",
-    "atm_support": "Which ATMs or ATM networks support cash withdrawals with the card.",
-    "automatic_top_up": "Configuring or troubleshooting automatic account top-ups.",
-    "balance_not_updated_after_bank_transfer": (
-        "An incoming bank transfer has completed but the account balance has not updated."
-    ),
-    "balance_not_updated_after_cheque_or_cash_deposit": (
-        "A cash or cheque deposit has not appeared in the account balance."
-    ),
-    "beneficiary_not_allowed": (
-        "A bank transfer recipient is blocked or not permitted as a beneficiary."
-    ),
-    "cancel_transfer": "Cancelling an already initiated bank transfer.",
-    "card_about_to_expire": "Replacing or renewing a card that is approaching its expiry date.",
-    "card_acceptance": "Whether a physical card is accepted by particular merchants or locations.",
-    "card_arrival": "Locating an ordered physical card that has not arrived.",
-    "card_delivery_estimate": "Learning the expected delivery time for a physical card.",
-    "card_linking": "Linking an existing card to the correct account or app.",
-    "card_not_working": (
-        "A physical card is not working, without a specifically identified payment decline."
-    ),
-    "card_payment_fee_charged": "A fee was charged for making a card payment.",
-    "card_payment_not_recognised": (
-        "A card purchase on the statement is not recognised by the customer."
-    ),
-    "card_payment_wrong_exchange_rate": (
-        "A card purchase used an unexpected currency exchange rate."
-    ),
-    "card_swallowed": "An ATM retained the customer's physical card.",
-    "cash_withdrawal_charge": "A fee was charged for a cash withdrawal.",
-    "cash_withdrawal_not_recognised": (
-        "A cash withdrawal on the statement was not made or recognised by the customer."
-    ),
-    "change_pin": "Changing the PIN of a bank card.",
-    "compromised_card": (
-        "Suspected exposure or theft of card details, even if the physical card is still held."
-    ),
-    "contactless_not_working": "The contactless tap-to-pay function of a card is not working.",
-    "country_support": (
-        "Whether residents of a particular country can open or use the banking service."
-    ),
-    "declined_card_payment": "A card purchase was explicitly declined.",
-    "declined_cash_withdrawal": "An ATM cash withdrawal was explicitly declined.",
-    "declined_transfer": "A bank transfer was explicitly declined or rejected.",
-    "direct_debit_payment_not_recognised": (
-        "A direct debit payment is not recognised by the customer."
-    ),
-    "disposable_card_limits": "Usage restrictions or limits of disposable virtual cards.",
-    "edit_personal_details": "Changing personal information recorded on the account.",
-    "exchange_charge": "Fees charged for exchanging one currency into another.",
-    "exchange_rate": "The currency exchange rate offered or how that rate is determined.",
-    "exchange_via_app": (
-        "Exchanging currencies within the app, not sending money to another person."
-    ),
-    "extra_charge_on_statement": (
-        "An additional unexplained charge appears on the statement, not a duplicate transaction."
-    ),
-    "failed_transfer": "A bank transfer failed to execute, rather than remaining pending.",
-    "fiat_currency_support": "Which traditional currencies the account can hold or use.",
-    "get_disposable_virtual_card": "Obtaining a disposable single-use virtual card.",
-    "get_physical_card": "Obtaining a physical plastic card rather than relying on a virtual card.",
-    "getting_spare_card": (
-        "Obtaining an additional spare physical card while keeping the existing one."
-    ),
-    "getting_virtual_card": "Creating a reusable virtual card in the app.",
-    "lost_or_stolen_card": (
-        "Reporting a physical card that has been lost or stolen and securing it."
-    ),
-    "lost_or_stolen_phone": (
-        "Securing access to the banking account after a phone was lost or stolen."
-    ),
-    "order_physical_card": "The steps for placing a physical card order in the app.",
-    "passcode_forgotten": (
-        "Recovering access after forgetting the app login passcode, not the card PIN."
-    ),
-    "pending_card_payment": "A card purchase remains in pending status.",
-    "pending_cash_withdrawal": "An ATM withdrawal remains in pending status on the account.",
-    "pending_top_up": "Adding money to the account is still marked as a pending top-up.",
-    "pending_transfer": "A bank transfer remains in pending status.",
-    "pin_blocked": "A card PIN has been blocked, usually after unsuccessful PIN attempts.",
-    "receiving_money": "How another person can send money to the customer's account.",
-    "Refund_not_showing_up": (
-        "A merchant has issued a refund but it has not appeared in the account."
-    ),
-    "request_refund": "Requesting a refund for a transaction, before the refund has been issued.",
-    "reverted_card_payment?": (
-        "A card payment was reversed or reverted and the customer wants to understand it."
-    ),
-    "supported_cards_and_currencies": (
-        "Which funding cards and currencies are supported when topping up by card."
-    ),
-    "terminate_account": "Closing the customer's banking account permanently.",
-    "top_up_by_bank_transfer_charge": (
-        "Charges for funding the account through an incoming bank transfer."
-    ),
-    "top_up_by_card_charge": "Charges for funding the account with another payment card.",
-    "top_up_by_cash_or_cheque": "Whether and how cash or cheques can be used to fund the account.",
-    "top_up_failed": "An attempted top-up failed, rather than remaining pending.",
-    "top_up_limits": "Minimum or maximum amounts allowed for account top-ups.",
-    "top_up_reverted": "A completed or attempted top-up was reversed back to its funding source.",
-    "topping_up_by_card": "How to add money to the account using a funding card.",
-    "transaction_charged_twice": "The same transaction was charged twice.",
-    "transfer_fee_charged": "A fee was charged for an outgoing bank transfer.",
-    "transfer_into_account": (
-        "Funding the account from an external bank account using bank transfer details."
-    ),
-    "transfer_not_received_by_recipient": (
-        "An outgoing transfer was sent but the intended recipient has not received it."
-    ),
-    "transfer_timing": "How long a bank transfer normally takes to arrive.",
-    "unable_to_verify_identity": (
-        "An attempted identity verification cannot be completed or is failing."
-    ),
-    "verify_my_identity": "How to complete the bank's identity verification process.",
-    "verify_source_of_funds": (
-        "Providing documents or information to verify where deposited funds came from."
-    ),
-    "verify_top_up": "Completing a verification or security check for a card top-up.",
-    "virtual_card_not_working": "A reusable virtual card is not working.",
-    "visa_or_mastercard": "Whether the issued card belongs to the Visa or Mastercard network.",
-    "why_verify_identity": "Why identity verification is required by the bank.",
-    "wrong_amount_of_cash_received": (
-        "An ATM dispensed a different amount of cash than requested or debited."
-    ),
-    "wrong_exchange_rate_for_cash_withdrawal": (
-        "A cash withdrawal used an unexpected currency exchange rate."
-    ),
-}
-INTENTS = tuple(INTENT_DESCRIPTIONS)
 ENTITY_TYPES: tuple[EntityType, ...] = (
     "PERSON",
     "CREDIT_CARD",
@@ -230,7 +103,7 @@ def legacy_scenarios(seed: int) -> tuple[Scenario, ...]:
                 seed=seed,
                 sample_seed=sample_seed,
                 intent=intent,
-                intent_description=INTENT_DESCRIPTIONS[intent],
+                intent_description=INTENT_DESCRIPTIONS_V1[intent],
                 channel=channel,
                 customer_turns=count,
                 start_sentiment=start,
@@ -294,10 +167,13 @@ def _assign_pii(intents: list[str], rng: random.Random) -> dict[int, list[Entity
     return chosen
 
 
-def scenarios(seed: int, plan: PlanVersion = 4) -> tuple[ScenarioV3, ...]:
+def scenarios(
+    seed: int, plan: PlanVersion = 4, taxonomy: TaxonomyVersion = 2
+) -> tuple[ScenarioV3, ...]:
     """Plans v3/v4 for golden-v1: v2 channel and intent quotas with plausible labels and PII.
 
-    Plan 4 is current (generator 3.2); plan 3 reproduces the generator 3.1 pilot.
+    Plan 4 is current; plan 3 reproduces the generator 3.1 pilot. Taxonomy 1 reproduces the
+    descriptions used up to generator 3.2; taxonomy 2 (generator 3.3) changes no label.
     """
     if seed < 0:
         raise ValueError("seed must be nonnegative")
@@ -389,7 +265,8 @@ def scenarios(seed: int, plan: PlanVersion = 4) -> tuple[ScenarioV3, ...]:
                     "seed": seed,
                     "sample_seed": seed_value,
                     "intent": intent,
-                    "intent_description": INTENT_DESCRIPTIONS[intent],
+                    "intent_description": DESCRIPTIONS[taxonomy][intent],
+                    "taxonomy_version": taxonomy,
                     "intent_kind": kind,
                     "pii_family": PII_FAMILY[intent],
                     "channel": channels[index],

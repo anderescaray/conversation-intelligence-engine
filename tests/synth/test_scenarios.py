@@ -1,6 +1,7 @@
 from collections import Counter
 
-from scripts.synth.scenarios import ENTITY_TYPES, INTENT_DESCRIPTIONS, INTENTS, scenarios
+from scripts.synth.scenarios import ENTITY_TYPES, scenarios
+from scripts.synth.taxonomy import INTENT_DESCRIPTIONS, INTENTS
 
 
 def test_reproducible_full_golden_plan() -> None:

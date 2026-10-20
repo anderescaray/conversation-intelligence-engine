@@ -206,6 +206,9 @@ async def test_exhausted_slot_is_rerolled_then_left_unfilled(
     assert result.unfilled_indices == [0] and result.rerolled_ids == [base.id]
     stats = result.rejections_by_stratum
     assert stats["intent_kind"][base.intent_kind].exhausted == 1
+    for values in stats.values():
+        assert sum(v.exhausted for v in values.values()) == len(result.unfilled_indices)
+        assert sum(v.scenarios for v in values.values()) == 1
     assert stats["reroll"]["2"].attempts == 1
     assert stats["channel"]["chat"].reject_rate == 1.0
     again = await generate_run(
