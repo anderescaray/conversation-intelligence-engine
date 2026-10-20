@@ -16,7 +16,9 @@ T03 entrena con Banking77 real. Tampoco implementa el eval runner/CI gate de T11
 
 ## Generación label-first
 
-El generador **3.2.0 / esquema 3** usa el **plan de escenarios v4** (abajo), `prompts/synthetic/v3.yaml`
+El generador **3.3.0 / esquema 3** usa el plan de escenarios v4 con la taxonomía v2, `prompts/synthetic/v4.yaml`
+y `prompts/synthetic_judge/v3.yaml`, que comparten la guía de etiquetado v1 (sección «Generador 3.3»).
+El generador **3.2.0** usaba el **plan de escenarios v4** (abajo), `prompts/synthetic/v3.yaml`
 (salida estructurada por turno contra un esqueleto construido por código) y el juez ciego
 `prompts/synthetic_judge/v2.yaml`. Ni 3.1 ni 3.2 cambian prompts, así que la puerta de controles
 del juez sigue vigente. El generador 3.1.0 usaba el plan v3 y el 3.0.0, el plan v2.
@@ -500,6 +502,57 @@ porque Faker lo requiere y el resolver había seleccionado una versión publicad
 se prefiere una release verificada de 2025-03-23. No se usan fechas ni zonas horarias de Faker.
 No se añadieron dependencias al servicio base, SDKs de proveedor ni bibliotecas de audio:
 se reutilizan PyAV/numpy y `wave`.
+
+## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
+
+**Guía de etiquetado.** `evals/datasets/labeling-guide-v1.md` es inmutable y se incrusta literalmente
+en `prompts/synthetic/v4.yaml` (generador) y `prompts/synthetic_judge/v3.yaml` (juez); un test lo
+comprueba. Define resolución, sentimiento, cortesía, escalación y evidencia, y describe las familias
+de intents confundibles. Cambiar una regla exige una guía v2 y prompts nuevos.
+
+**Cambio de definición de «resuelto»** (alineada con la resolución en el primer contacto). Antes, toda
+acción futura o pendiente contaba como no resuelta. Ahora un reembolso **procesado** con plazo, una
+tarjeta pedida o un PIN restablecido cuentan como **resueltos**: solo queda el tiempo de proceso o
+entrega. Las investigaciones, las decisiones de disputas, las llamadas posteriores y los traspasos a
+otro equipo o persona **siguen sin resolver**. Una escalación solo se resuelve si la persona que la
+recibe la resuelve en la misma conversación. El sentimiento es el tono del cliente, no el tema;
+informar con calma de algo malo es neutral, y la cortesía («thanks», «ok», «bye») es neutral.
+
+**Taxonomía v2.** Se auditaron las 77 descripciones contra ejemplos de train de Banking77 (en local).
+Cambian 21:
+- Cuatro porque los ejemplos las contradecían:
+  - `get_physical_card` trata del PIN de una tarjeta nueva (105/106 ejemplos), no de obtener la tarjeta;
+  - `apple_pay_or_google_pay` trata sobre todo de recargas (103/126);
+  - `virtual_card_not_working` incluye tarjetas desechables;
+  - `visa_or_mastercard` incluye pedir una red concreta.
+- Catorce para desambiguar familias confundibles.
+- Tres solo para no compartir 6-gramas con ninguna frase de Banking77.
+
+Ninguna descripción v2 contiene una frase de Banking77 ni comparte 6 palabras seguidas con ella
+(`scripts.synth.audit --descriptions-against`, 13.069 frases locales). La v1 compartía 6-gramas en 4
+descripciones. Cada versión del juez está ligada a su taxonomía (juez v2 con la v1, juez v3 con la
+v2), de modo que los veredictos antiguos siguen siendo verificables. **Simplificación conocida:**
+`get_physical_card` conserva su tipo (request) y su familia de PII (general), definidos cuando se
+creía que trataba de obtener una tarjeta física.
+
+**Cota superior.** Los candidatos admitidos son los casos en que generador y juez, aplicando la
+misma guía, coinciden con el objetivo. Las conversaciones reales ambiguas no pasan ese filtro, así
+que las métricas sobre golden-v1 son una cota superior para ellas.
+
+**Puerta v2** (`tests/synth/judge_controls_v2.jsonl`): son los 10 controles anteriores, sin cambios
+(ninguno cambia de etiqueta con la guía), más 12 nuevos. Hay un control válido y otro roto en un solo
+campo para: inicio neutral y calmado en un problema; reembolso procesado con plazo; petición sin
+resolver por un obstáculo explícito; turno final solo de cortesía; par confundible
+(`top_up_by_card_charge`, y el PIN de `get_physical_card` frente a `order_physical_card`); y
+escalación resuelta por el supervisor en la conversación.
+
+Resultado con Haiku y juez v3 (`data/synthetic/judge-checks/claude-haiku-4-5-gate-v2.json`): **21/22,
+no pasa** (0,145 USD, 53 s). Por campo: intent, resolved, escalación y final 22/22; inicio 21/22. El
+único fallo es `ctl-10`: el primer turno «My automatic top-up didn't trigger yesterday even though my
+balance went below the threshold. That's annoying.» es negativo en el control, y el juez lo lee como
+neutral. Con la regla «calmly reporting a bad event is neutral; negative needs expressed
+frustration», un «That's annoying» suave queda en el límite. Siguiendo la regla acordada, no se
+ajustaron prompts ni controles, y no se ejecutaron el re-juicio ni la regeneración.
 
 ## Ejecución completa 3.2 (2026-10-20): 150 escenarios del plan v4 con Haiku
 
