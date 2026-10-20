@@ -501,6 +501,43 @@ se prefiere una release verificada de 2025-03-23. No se usan fechas ni zonas hor
 No se añadieron dependencias al servicio base, SDKs de proveedor ni bibliotecas de audio:
 se reutilizan PyAV/numpy y `wave`.
 
+## Ejecución completa 3.2 (2026-10-20): 150 escenarios del plan v4 con Haiku
+
+Antes de esta ejecución, el piloto 3.2 (`pilot-v3.2-haiku`, mismos primeros diez escenarios) admitió
+10/10 en 13 intentos (0,12 USD, 80 s), sin huecos sin rellenar ni estratos con el 100 % de rechazos,
+y se continuó. Ejecución completa: semilla 42, Haiku genera y juzga, `--max-cost-usd 5` (no se
+alcanzó), NER local, sin audio. Artefactos en `data/synthetic/candidates/full-v3.2-haiku/`.
+**Son candidatos, no golden-v1: 0 aprobaciones humanas.**
+
+| Métrica | Valor |
+| --- | ---: |
+| Admitidos (validadores + juez) | **132/150** |
+| Huecos sin rellenar | 18: 15 fallos sistemáticos y 3 tras agotar re-sorteos |
+| Intentos / rechazos | 264 / 132 (juez 100, `unowned_pii` 17, `escalation_evidence` 15) |
+| Campos fallidos según el juez | resolved 46, inicio 38, final 21, intent 13, escalación 4 |
+| Reparaciones de esqueleto | 22, todas corregidas |
+| Re-sorteos | 10 huecos, 7 rescatados |
+| Generación por hueco / por admitido | 7,6 s · 0,0075 USD / 8,6 s · 0,0086 USD |
+| Juez por hueco / por admitido | 3,4 s · 0,0080 USD / 3,9 s · 0,0091 USD |
+| Coste y tiempo totales | **2,34 USD · 27,8 min** (proyección central previa: 2,0–2,8 USD) |
+
+Cuotas de los admitidos frente al plan: chat 88/100, voz 44/50; resueltos 64/75, no resueltos 68/75;
+escalación 28/30. **Faltan 5 intents** sin ningún candidato (`change_pin`, `get_physical_card`,
+`lost_or_stolen_phone`, `request_refund` y `top_up_by_card_charge`), así que no se cumple la
+cobertura de intents. golden-v1 no se puede exportar hasta resolver esos huecos.
+
+Rechazo por estrato (intentos / tasa / huecos agotados): info 52 / 23 % / 2; problem 130 / 50 % / 7;
+request 82 / **67 %** / 9. Por sentimiento: neutral→neutral 30 / **90 %** / 4; positive→neutral 6 /
+83 % / 1; negative→positive 51 / 71 % / 3; negative→negative 59 / 25 % / 0. Con 4 turnos del cliente
+los rechazos llegan al 59 %, frente al 39 % con 3. Ningún estrato llega al 100 %.
+
+Patrones en los huecos sin rellenar, para decidir antes de completar:
+- **Inicio neutral en problem** (17, 33, 35, 144): el juez lee la primera queja como negativa.
+- **Request sin resolver** (12, 62, 81, 90): el juez ve la acción completada, incluidos dos casos
+  raros neutral→positivo sin resolver.
+- **Confusión de intents vecinos** (11 y 39 `top_up_by_card_charge`, 113 `get_physical_card`).
+- **Final neutral tras resolución** (42, 64, 136) y escalaciones resueltas negative→positive (59, 99).
+
 ## Piloto 3.1 (2026-10-18): plan v3 con Haiku
 
 Primeros diez escenarios del plan v3, semilla 42. Haiku genera y juzga. `--max-cost-usd 0.50`

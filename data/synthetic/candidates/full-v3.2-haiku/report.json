@@ -1,0 +1,678 @@
+{
+  "model_id": "anthropic:claude-haiku-4-5",
+  "judge_model_id": "anthropic:claude-haiku-4-5",
+  "target": 150,
+  "candidates": 132,
+  "human_approved": 0,
+  "attempts": 264,
+  "rejects": 132,
+  "reject_rate": 0.5,
+  "elapsed_s": 1668.4286589699973,
+  "mean_attempt_s": 6.319805526401505,
+  "mean_accepted_attempt_s": 6.486187822484811,
+  "input_tokens": 1526538,
+  "output_tokens": 162457,
+  "cost_usd": 2.338823,
+  "by_channel": {
+    "chat": 88,
+    "voice": 44
+  },
+  "by_intent": {
+    "exchange_via_app": 2,
+    "pending_top_up": 2,
+    "terminate_account": 2,
+    "cancel_transfer": 2,
+    "edit_personal_details": 2,
+    "receiving_money": 2,
+    "pending_cash_withdrawal": 2,
+    "fiat_currency_support": 2,
+    "visa_or_mastercard": 2,
+    "pin_blocked": 2,
+    "card_payment_fee_charged": 2,
+    "getting_spare_card": 2,
+    "transfer_into_account": 2,
+    "disposable_card_limits": 2,
+    "top_up_by_bank_transfer_charge": 2,
+    "top_up_reverted": 2,
+    "transfer_not_received_by_recipient": 1,
+    "Refund_not_showing_up": 2,
+    "beneficiary_not_allowed": 2,
+    "contactless_not_working": 2,
+    "top_up_failed": 2,
+    "declined_card_payment": 2,
+    "apple_pay_or_google_pay": 2,
+    "top_up_by_cash_or_cheque": 2,
+    "card_swallowed": 1,
+    "card_payment_not_recognised": 2,
+    "transfer_fee_charged": 2,
+    "cash_withdrawal_charge": 2,
+    "reverted_card_payment?": 2,
+    "top_up_limits": 2,
+    "country_support": 2,
+    "balance_not_updated_after_bank_transfer": 2,
+    "balance_not_updated_after_cheque_or_cash_deposit": 2,
+    "order_physical_card": 2,
+    "compromised_card": 1,
+    "verify_source_of_funds": 2,
+    "card_about_to_expire": 2,
+    "pending_transfer": 1,
+    "transaction_charged_twice": 2,
+    "transfer_timing": 2,
+    "card_acceptance": 2,
+    "activate_my_card": 2,
+    "verify_top_up": 2,
+    "get_disposable_virtual_card": 2,
+    "virtual_card_not_working": 2,
+    "topping_up_by_card": 2,
+    "declined_cash_withdrawal": 2,
+    "extra_charge_on_statement": 2,
+    "lost_or_stolen_card": 2,
+    "pending_card_payment": 2,
+    "card_delivery_estimate": 2,
+    "why_verify_identity": 2,
+    "age_limit": 2,
+    "exchange_rate": 2,
+    "wrong_exchange_rate_for_cash_withdrawal": 2,
+    "declined_transfer": 2,
+    "passcode_forgotten": 1,
+    "unable_to_verify_identity": 2,
+    "wrong_amount_of_cash_received": 2,
+    "supported_cards_and_currencies": 2,
+    "card_arrival": 2,
+    "verify_my_identity": 2,
+    "card_linking": 2,
+    "card_payment_wrong_exchange_rate": 2,
+    "direct_debit_payment_not_recognised": 2,
+    "exchange_charge": 1,
+    "failed_transfer": 1,
+    "atm_support": 1,
+    "card_not_working": 1,
+    "getting_virtual_card": 1,
+    "automatic_top_up": 1,
+    "cash_withdrawal_not_recognised": 1
+  },
+  "by_sentiment": {
+    "neutral->positive": 46,
+    "negative->negative": 44,
+    "neutral->neutral": 3,
+    "neutral->negative": 11,
+    "negative->neutral": 12,
+    "negative->positive": 15,
+    "positive->neutral": 1
+  },
+  "by_resolved": {
+    "true": 64,
+    "false": 68
+  },
+  "by_escalation": {
+    "false": 104,
+    "true": 28
+  },
+  "by_pii": {
+    "IBAN_CODE": 29,
+    "PHONE_NUMBER": 51,
+    "ACCOUNT_NUMBER": 37,
+    "CREDIT_CARD": 46,
+    "PERSON": 40,
+    "EMAIL_ADDRESS": 35
+  },
+  "rejection_reasons": {
+    "label_mismatch": 100,
+    "unowned_pii": 17,
+    "escalation_evidence": 15
+  },
+  "rejection_categories": {
+    "judge": 100,
+    "validator": 32
+  },
+  "rejection_rates": {
+    "judge": 0.3787878787878788,
+    "validator": 0.12121212121212122
+  },
+  "judge_failed_labels": {
+    "resolved": 46,
+    "start_sentiment": 38,
+    "intent": 13,
+    "end_sentiment": 21,
+    "escalation_requested": 4
+  },
+  "sample_elapsed_s": {
+    "synth-v4-42-000": 5.918429657000161,
+    "synth-v4-42-001": 8.767986724000366,
+    "synth-v4-42-002": 11.749880887000018,
+    "synth-v4-42-003": 11.51694661099964,
+    "synth-v4-42-004": 5.5783032519998415,
+    "synth-v4-42-005": 6.527701808000074,
+    "synth-v4-42-006": 5.950970193000103,
+    "synth-v4-42-007": 7.767061598000055,
+    "synth-v4-42-008": 6.032318667000254,
+    "synth-v4-42-009": 14.096064840000054,
+    "synth-v4-42-010": 6.696365428000263,
+    "synth-v4-42-011": 17.760843156999726,
+    "synth-v4-42-012": 19.713093023000056,
+    "synth-v4-42-013": 5.7086776230003125,
+    "synth-v4-42-014": 5.639997432999735,
+    "synth-v4-42-015": 5.677946934999909,
+    "synth-v4-42-016": 6.461871563999921,
+    "synth-v4-42-017": 22.179401503999998,
+    "synth-v4-42-018": 26.544765279999865,
+    "synth-v4-42-019": 14.36592823799947,
+    "synth-v4-42-020": 6.878636579000158,
+    "synth-v4-42-021": 23.34080078499983,
+    "synth-v4-42-022": 6.154736052999851,
+    "synth-v4-42-023": 6.938701639000101,
+    "synth-v4-42-024": 8.685086383999987,
+    "synth-v4-42-025": 6.658204443000159,
+    "synth-v4-42-026": 12.561338602999967,
+    "synth-v4-42-027": 6.29903404200013,
+    "synth-v4-42-028": 6.284341119000146,
+    "synth-v4-42-029": 10.824532452999847,
+    "synth-v4-42-030": 19.224484868000218,
+    "synth-v4-42-031": 11.97696074400028,
+    "synth-v4-42-032": 5.75219984999967,
+    "synth-v4-42-033": 24.424921129999802,
+    "synth-v4-42-034": 18.279478179999842,
+    "synth-v4-42-035": 22.941956155999378,
+    "synth-v4-42-036": 6.77446880799971,
+    "synth-v4-42-037": 5.3579399290001675,
+    "synth-v4-42-038": 6.2311932239999805,
+    "synth-v4-42-039": 17.841513858000326,
+    "synth-v4-42-040": 21.171803075000298,
+    "synth-v4-42-041": 6.600266336000004,
+    "synth-v4-42-042": 16.92101266499958,
+    "synth-v4-42-043": 7.876824603999921,
+    "synth-v4-42-044": 5.12241830999983,
+    "synth-v4-42-045": 6.1693568709997635,
+    "synth-v4-42-046": 5.465121571000054,
+    "synth-v4-42-047": 21.533644970000296,
+    "synth-v4-42-048": 6.93031258200017,
+    "synth-v4-42-049": 6.290269237999837,
+    "synth-v4-42-050": 5.9349514580003415,
+    "synth-v4-42-051": 8.99244889800002,
+    "synth-v4-42-052": 5.098458118999588,
+    "synth-v4-42-053": 6.129856135999944,
+    "synth-v4-42-054": 5.529006890999881,
+    "synth-v4-42-055": 6.526879489999828,
+    "synth-v4-42-056": 6.345668206000028,
+    "synth-v4-42-057": 6.09036669499983,
+    "synth-v4-42-058": 6.492280352000307,
+    "synth-v4-42-059": 51.45714764600052,
+    "synth-v4-42-060": 6.842208231999848,
+    "synth-v4-42-061": 13.618485382000017,
+    "synth-v4-42-062": 17.710126556000432,
+    "synth-v4-42-063": 5.791076613999849,
+    "synth-v4-42-064": 19.27008945500029,
+    "synth-v4-42-065": 5.624961380000059,
+    "synth-v4-42-066": 6.379691898999681,
+    "synth-v4-42-067": 6.763668435,
+    "synth-v4-42-068": 5.54969772100003,
+    "synth-v4-42-069": 5.962702035999882,
+    "synth-v4-42-070": 6.740068035999684,
+    "synth-v4-42-071": 8.748248201000024,
+    "synth-v4-42-072": 6.021575001999736,
+    "synth-v4-42-073": 34.280783145000896,
+    "synth-v4-42-074": 11.693865719000314,
+    "synth-v4-42-075": 6.726785168000333,
+    "synth-v4-42-076": 5.668908272999943,
+    "synth-v4-42-077": 5.8215484659999674,
+    "synth-v4-42-078": 6.706717706999825,
+    "synth-v4-42-079": 19.764201291000063,
+    "synth-v4-42-080": 5.919617205000122,
+    "synth-v4-42-081": 17.70794440200052,
+    "synth-v4-42-082": 12.144816636999622,
+    "synth-v4-42-083": 6.564131424000152,
+    "synth-v4-42-084": 7.01263806399993,
+    "synth-v4-42-085": 5.6669771980000405,
+    "synth-v4-42-086": 6.836522817999594,
+    "synth-v4-42-087": 6.548466875000031,
+    "synth-v4-42-088": 7.914067230000001,
+    "synth-v4-42-089": 5.657981684999868,
+    "synth-v4-42-090": 15.958508416000313,
+    "synth-v4-42-091": 5.550408255000093,
+    "synth-v4-42-092": 26.115979126000184,
+    "synth-v4-42-093": 5.971200495000176,
+    "synth-v4-42-094": 7.233362006999869,
+    "synth-v4-42-095": 28.83813958000019,
+    "synth-v4-42-096": 6.422126482999829,
+    "synth-v4-42-097": 6.341208345999803,
+    "synth-v4-42-098": 7.493380890000026,
+    "synth-v4-42-099": 47.06917151599964,
+    "synth-v4-42-100": 6.336175441999785,
+    "synth-v4-42-101": 7.107207479999943,
+    "synth-v4-42-102": 6.368847643999743,
+    "synth-v4-42-103": 17.728351030999875,
+    "synth-v4-42-104": 6.002843359999588,
+    "synth-v4-42-105": 12.048475972999768,
+    "synth-v4-42-106": 6.873607198999707,
+    "synth-v4-42-107": 5.837330734999796,
+    "synth-v4-42-108": 6.731801710999662,
+    "synth-v4-42-109": 9.332740910000211,
+    "synth-v4-42-110": 5.652253959999598,
+    "synth-v4-42-111": 6.201595699999871,
+    "synth-v4-42-112": 5.618675641000209,
+    "synth-v4-42-113": 17.59588454599998,
+    "synth-v4-42-114": 6.118738960999963,
+    "synth-v4-42-115": 9.033064708999973,
+    "synth-v4-42-116": 7.130870183000297,
+    "synth-v4-42-117": 5.988653961999717,
+    "synth-v4-42-118": 5.688314557000012,
+    "synth-v4-42-119": 36.77172301999963,
+    "synth-v4-42-120": 14.000477582999793,
+    "synth-v4-42-121": 6.301389205000305,
+    "synth-v4-42-122": 6.857855884999935,
+    "synth-v4-42-123": 7.329928545000257,
+    "synth-v4-42-124": 8.750686522999786,
+    "synth-v4-42-125": 22.630542876000163,
+    "synth-v4-42-126": 5.736153359999662,
+    "synth-v4-42-127": 6.583672936999847,
+    "synth-v4-42-128": 6.706019254999774,
+    "synth-v4-42-129": 17.436498131999997,
+    "synth-v4-42-130": 11.231714310999905,
+    "synth-v4-42-131": 5.480010113999924,
+    "synth-v4-42-132": 5.850191377999636,
+    "synth-v4-42-133": 6.953545926000061,
+    "synth-v4-42-134": 9.453029520999735,
+    "synth-v4-42-135": 51.51826497300044,
+    "synth-v4-42-136": 17.081596751000234,
+    "synth-v4-42-137": 8.801187943000059,
+    "synth-v4-42-138": 6.086008721000326,
+    "synth-v4-42-139": 53.92052406399989,
+    "synth-v4-42-140": 6.2934877210000195,
+    "synth-v4-42-141": 6.3980944640002235,
+    "synth-v4-42-142": 6.733701846000258,
+    "synth-v4-42-143": 5.477881262999745,
+    "synth-v4-42-144": 24.937810394999815,
+    "synth-v4-42-145": 5.727207954000278,
+    "synth-v4-42-146": 12.62250618500002,
+    "synth-v4-42-147": 5.625279915999727,
+    "synth-v4-42-148": 6.334321548999924,
+    "synth-v4-42-149": 13.986678197999936
+  },
+  "timed_out_ids": [],
+  "missing_indices": [
+    11,
+    12,
+    17,
+    21,
+    33,
+    35,
+    39,
+    42,
+    59,
+    62,
+    64,
+    81,
+    90,
+    99,
+    113,
+    135,
+    136,
+    144
+  ],
+  "repairs": 22,
+  "repairs_fixed": 22,
+  "phase_totals": {
+    "generation": {
+      "seconds": 1136.227985717997,
+      "input_tokens": 548626,
+      "output_tokens": 116597,
+      "cost_usd": 1.131611
+    },
+    "judge": {
+      "seconds": 515.7086402029959,
+      "input_tokens": 977912,
+      "output_tokens": 45860,
+      "cost_usd": 1.207212
+    }
+  },
+  "phase_mean_per_scenario": {
+    "generation": {
+      "seconds": 7.57485323811998,
+      "input_tokens": 3658,
+      "output_tokens": 777,
+      "cost_usd": 0.007544073333333332
+    },
+    "judge": {
+      "seconds": 3.438057601353306,
+      "input_tokens": 6519,
+      "output_tokens": 306,
+      "cost_usd": 0.008048079999999999
+    }
+  },
+  "phase_per_admitted": {
+    "generation": {
+      "seconds": 8.607787770590885,
+      "input_tokens": 4156,
+      "output_tokens": 883,
+      "cost_usd": 0.008572810606060605
+    },
+    "judge": {
+      "seconds": 3.9068836379014837,
+      "input_tokens": 7408,
+      "output_tokens": 347,
+      "cost_usd": 0.009145545454545455
+    }
+  },
+  "rerolled_ids": [
+    "synth-v4-42-040",
+    "synth-v4-42-059",
+    "synth-v4-42-073",
+    "synth-v4-42-092",
+    "synth-v4-42-095",
+    "synth-v4-42-099",
+    "synth-v4-42-119",
+    "synth-v4-42-125",
+    "synth-v4-42-135",
+    "synth-v4-42-139"
+  ],
+  "unfilled_indices": [
+    11,
+    12,
+    17,
+    21,
+    33,
+    35,
+    39,
+    42,
+    59,
+    62,
+    64,
+    81,
+    90,
+    99,
+    113,
+    135,
+    136,
+    144
+  ],
+  "rejections_by_stratum": {
+    "channel": {
+      "chat": {
+        "attempts": 172,
+        "rejected": 84,
+        "reject_rate": 0.4883720930232558,
+        "scenarios": 100,
+        "exhausted": 12
+      },
+      "voice": {
+        "attempts": 92,
+        "rejected": 48,
+        "reject_rate": 0.5217391304347826,
+        "scenarios": 50,
+        "exhausted": 6
+      }
+    },
+    "intent_kind": {
+      "info": {
+        "attempts": 52,
+        "rejected": 12,
+        "reject_rate": 0.23076923076923078,
+        "scenarios": 42,
+        "exhausted": 2
+      },
+      "problem": {
+        "attempts": 130,
+        "rejected": 65,
+        "reject_rate": 0.5,
+        "scenarios": 72,
+        "exhausted": 7
+      },
+      "request": {
+        "attempts": 82,
+        "rejected": 55,
+        "reject_rate": 0.6707317073170732,
+        "scenarios": 36,
+        "exhausted": 9
+      }
+    },
+    "pii_family": {
+      "account": {
+        "attempts": 46,
+        "rejected": 27,
+        "reject_rate": 0.5869565217391305,
+        "scenarios": 22,
+        "exhausted": 3
+      },
+      "bank": {
+        "attempts": 47,
+        "rejected": 26,
+        "reject_rate": 0.5531914893617021,
+        "scenarios": 23,
+        "exhausted": 2
+      },
+      "card": {
+        "attempts": 111,
+        "rejected": 56,
+        "reject_rate": 0.5045045045045045,
+        "scenarios": 65,
+        "exhausted": 10
+      },
+      "general": {
+        "attempts": 46,
+        "rejected": 15,
+        "reject_rate": 0.32608695652173914,
+        "scenarios": 34,
+        "exhausted": 3
+      },
+      "topup": {
+        "attempts": 14,
+        "rejected": 8,
+        "reject_rate": 0.5714285714285714,
+        "scenarios": 6,
+        "exhausted": 0
+      }
+    },
+    "resolved": {
+      "false": {
+        "attempts": 118,
+        "rejected": 50,
+        "reject_rate": 0.423728813559322,
+        "scenarios": 75,
+        "exhausted": 7
+      },
+      "true": {
+        "attempts": 146,
+        "rejected": 82,
+        "reject_rate": 0.5616438356164384,
+        "scenarios": 75,
+        "exhausted": 11
+      }
+    },
+    "escalation_requested": {
+      "false": {
+        "attempts": 194,
+        "rejected": 90,
+        "reject_rate": 0.4639175257731959,
+        "scenarios": 120,
+        "exhausted": 16
+      },
+      "true": {
+        "attempts": 70,
+        "rejected": 42,
+        "reject_rate": 0.6,
+        "scenarios": 30,
+        "exhausted": 2
+      }
+    },
+    "sentiment": {
+      "negative->negative": {
+        "attempts": 59,
+        "rejected": 15,
+        "reject_rate": 0.2542372881355932,
+        "scenarios": 44,
+        "exhausted": 0
+      },
+      "negative->neutral": {
+        "attempts": 22,
+        "rejected": 10,
+        "reject_rate": 0.45454545454545453,
+        "scenarios": 13,
+        "exhausted": 1
+      },
+      "negative->positive": {
+        "attempts": 51,
+        "rejected": 36,
+        "reject_rate": 0.7058823529411765,
+        "scenarios": 18,
+        "exhausted": 3
+      },
+      "neutral->negative": {
+        "attempts": 23,
+        "rejected": 12,
+        "reject_rate": 0.5217391304347826,
+        "scenarios": 14,
+        "exhausted": 3
+      },
+      "neutral->neutral": {
+        "attempts": 30,
+        "rejected": 27,
+        "reject_rate": 0.9,
+        "scenarios": 7,
+        "exhausted": 4
+      },
+      "neutral->positive": {
+        "attempts": 73,
+        "rejected": 27,
+        "reject_rate": 0.3698630136986301,
+        "scenarios": 52,
+        "exhausted": 6
+      },
+      "positive->neutral": {
+        "attempts": 6,
+        "rejected": 5,
+        "reject_rate": 0.8333333333333334,
+        "scenarios": 2,
+        "exhausted": 1
+      }
+    },
+    "pii": {
+      "with": {
+        "attempts": 203,
+        "rejected": 98,
+        "reject_rate": 0.4827586206896552,
+        "scenarios": 120,
+        "exhausted": 15
+      },
+      "without": {
+        "attempts": 61,
+        "rejected": 34,
+        "reject_rate": 0.5573770491803278,
+        "scenarios": 30,
+        "exhausted": 3
+      }
+    },
+    "customer_turns": {
+      "3": {
+        "attempts": 114,
+        "rejected": 44,
+        "reject_rate": 0.38596491228070173,
+        "scenarios": 77,
+        "exhausted": 6
+      },
+      "4": {
+        "attempts": 150,
+        "rejected": 88,
+        "reject_rate": 0.5866666666666667,
+        "scenarios": 79,
+        "exhausted": 14
+      }
+    },
+    "reroll": {
+      "0": {
+        "attempts": 229,
+        "rejected": 104,
+        "reject_rate": 0.45414847161572053,
+        "scenarios": 150,
+        "exhausted": 18
+      },
+      "1": {
+        "attempts": 24,
+        "rejected": 18,
+        "reject_rate": 0.75,
+        "scenarios": 10,
+        "exhausted": 3
+      },
+      "2": {
+        "attempts": 11,
+        "rejected": 10,
+        "reject_rate": 0.9090909090909091,
+        "scenarios": 4,
+        "exhausted": 3
+      }
+    }
+  },
+  "admitted_free_attributes": {
+    "persona": {
+      "busy customer": 45,
+      "experienced user": 43,
+      "new to mobile banking": 44
+    },
+    "verbosity": {
+      "brief": 66,
+      "moderate": 66
+    },
+    "noise": {
+      "light": 71,
+      "none": 61
+    },
+    "customer_turns": {
+      "3": 70,
+      "4": 62
+    },
+    "reroll": {
+      "0": 125,
+      "1": 6,
+      "2": 1
+    }
+  },
+  "systematic_failures": {
+    "synth-v4-42-011": [
+      "intent"
+    ],
+    "synth-v4-42-012": [
+      "resolved"
+    ],
+    "synth-v4-42-017": [
+      "start_sentiment"
+    ],
+    "synth-v4-42-021": [
+      "resolved"
+    ],
+    "synth-v4-42-033": [
+      "start_sentiment"
+    ],
+    "synth-v4-42-035": [
+      "start_sentiment"
+    ],
+    "synth-v4-42-039": [
+      "intent"
+    ],
+    "synth-v4-42-042": [
+      "end_sentiment"
+    ],
+    "synth-v4-42-062": [
+      "resolved"
+    ],
+    "synth-v4-42-064": [
+      "end_sentiment",
+      "start_sentiment"
+    ],
+    "synth-v4-42-081": [
+      "end_sentiment",
+      "resolved"
+    ],
+    "synth-v4-42-090": [
+      "resolved"
+    ],
+    "synth-v4-42-113": [
+      "intent"
+    ],
+    "synth-v4-42-136": [
+      "resolved"
+    ],
+    "synth-v4-42-144": [
+      "start_sentiment"
+    ]
+  },
+  "stopped_reason": null
+}

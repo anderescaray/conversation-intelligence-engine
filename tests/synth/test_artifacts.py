@@ -6,8 +6,8 @@ from convintel.contracts import Conversation
 from scripts.synth.audio import AudioManifest
 from scripts.synth.judge import reviewable
 from scripts.synth.pii import values_for
-from scripts.synth.scenarios import scenarios
-from scripts.synth.schema import Attempt, LegacyAnnotation, Report, RunSpec
+from scripts.synth.scenarios import reroll, scenarios
+from scripts.synth.schema import Attempt, LegacyAnnotation, Report, RunSpec, ScenarioV3
 from scripts.synth.storage import file_hash, load_samples, read_jsonl
 from scripts.synth.validation import ensure_unique, validate_sample
 
@@ -119,6 +119,29 @@ def test_v3_2_pilot_passed_the_full_run_gate() -> None:
     )
     for index, sample in enumerate(samples):
         assert sample.labels.scenario == plan[sample.labels.scenario.index]
+        assert reviewable(sample)
+        validate_sample(sample)
+        ensure_unique(sample, samples[:index])
+
+
+def test_v3_2_full_run_publishes_only_judge_passed_plan_v4_candidates() -> None:
+    directory = ROOT / "data/synthetic/candidates/full-v3.2-haiku"
+    run = RunSpec.model_validate_json((directory / "run.json").read_text())
+    report = Report.model_validate_json((directory / "report.json").read_text())
+    samples = load_samples(directory)
+    plan = scenarios(42)
+    assert run.generator_version == "3.2.0" and report.target == 150
+    assert report.candidates == len(samples) == 132 and report.human_approved == 0
+    assert report.stopped_reason is None and report.cost_usd is not None
+    assert report.cost_usd <= 5
+    assert len(report.unfilled_indices) == 18 and len(report.systematic_failures) == 15
+    assert read_jsonl(directory / "conversations.jsonl", Conversation) == [
+        sample.conversation for sample in samples
+    ]
+    for index, sample in enumerate(samples):
+        scenario = sample.labels.scenario
+        assert isinstance(scenario, ScenarioV3)
+        assert scenario == reroll(plan[scenario.index], scenario.reroll)
         assert reviewable(sample)
         validate_sample(sample)
         ensure_unique(sample, samples[:index])
