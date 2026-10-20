@@ -1,0 +1,333 @@
+{
+  "model_id": "anthropic:claude-haiku-4-5",
+  "judge_model_id": "anthropic:claude-haiku-4-5",
+  "target": 10,
+  "candidates": 10,
+  "human_approved": 0,
+  "attempts": 13,
+  "rejects": 3,
+  "reject_rate": 0.23076923076923078,
+  "elapsed_s": 80.3444779410006,
+  "mean_attempt_s": 6.1803444570000465,
+  "mean_accepted_attempt_s": 5.940975338700037,
+  "input_tokens": 79807,
+  "output_tokens": 8003,
+  "cost_usd": 0.119822,
+  "by_channel": {
+    "chat": 7,
+    "voice": 3
+  },
+  "by_intent": {
+    "exchange_via_app": 1,
+    "pending_top_up": 1,
+    "terminate_account": 1,
+    "cancel_transfer": 1,
+    "edit_personal_details": 1,
+    "receiving_money": 1,
+    "pending_cash_withdrawal": 1,
+    "fiat_currency_support": 1,
+    "visa_or_mastercard": 1,
+    "pin_blocked": 1
+  },
+  "by_sentiment": {
+    "neutral->positive": 6,
+    "negative->negative": 1,
+    "neutral->neutral": 1,
+    "neutral->negative": 1,
+    "negative->neutral": 1
+  },
+  "by_resolved": {
+    "true": 6,
+    "false": 4
+  },
+  "by_escalation": {
+    "false": 10
+  },
+  "by_pii": {
+    "IBAN_CODE": 3,
+    "PHONE_NUMBER": 7,
+    "ACCOUNT_NUMBER": 4,
+    "CREDIT_CARD": 2,
+    "PERSON": 2,
+    "EMAIL_ADDRESS": 1
+  },
+  "rejection_reasons": {
+    "label_mismatch": 3
+  },
+  "rejection_categories": {
+    "judge": 3
+  },
+  "rejection_rates": {
+    "judge": 0.23076923076923078
+  },
+  "judge_failed_labels": {
+    "intent": 1,
+    "resolved": 1,
+    "start_sentiment": 1
+  },
+  "sample_elapsed_s": {
+    "synth-v4-42-000": 6.321678920000068,
+    "synth-v4-42-001": 11.51119584900016,
+    "synth-v4-42-002": 12.292783014000634,
+    "synth-v4-42-003": 6.376716742000099,
+    "synth-v4-42-004": 5.006268963999901,
+    "synth-v4-42-005": 6.560649995999938,
+    "synth-v4-42-006": 15.208591363999858,
+    "synth-v4-42-007": 5.19677618500009,
+    "synth-v4-42-008": 6.15315985999996,
+    "synth-v4-42-009": 5.716657046999899
+  },
+  "timed_out_ids": [],
+  "missing_indices": [],
+  "repairs": 1,
+  "repairs_fixed": 1,
+  "phase_totals": {
+    "generation": {
+      "seconds": 52.46813420200078,
+      "input_tokens": 26862,
+      "output_tokens": 5540,
+      "cost_usd": 0.054562
+    },
+    "judge": {
+      "seconds": 27.06679532199996,
+      "input_tokens": 52945,
+      "output_tokens": 2463,
+      "cost_usd": 0.06526
+    }
+  },
+  "phase_mean_per_scenario": {
+    "generation": {
+      "seconds": 5.246813420200079,
+      "input_tokens": 2686,
+      "output_tokens": 554,
+      "cost_usd": 0.0054562
+    },
+    "judge": {
+      "seconds": 2.7066795321999964,
+      "input_tokens": 5294,
+      "output_tokens": 246,
+      "cost_usd": 0.006526
+    }
+  },
+  "phase_per_admitted": {
+    "generation": {
+      "seconds": 5.246813420200079,
+      "input_tokens": 2686,
+      "output_tokens": 554,
+      "cost_usd": 0.0054562
+    },
+    "judge": {
+      "seconds": 2.7066795321999964,
+      "input_tokens": 5294,
+      "output_tokens": 246,
+      "cost_usd": 0.006526
+    }
+  },
+  "rerolled_ids": [],
+  "unfilled_indices": [],
+  "rejections_by_stratum": {
+    "channel": {
+      "chat": {
+        "attempts": 9,
+        "rejected": 2,
+        "reject_rate": 0.2222222222222222,
+        "scenarios": 7,
+        "exhausted": 0
+      },
+      "voice": {
+        "attempts": 4,
+        "rejected": 1,
+        "reject_rate": 0.25,
+        "scenarios": 3,
+        "exhausted": 0
+      }
+    },
+    "intent_kind": {
+      "info": {
+        "attempts": 3,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 3,
+        "exhausted": 0
+      },
+      "problem": {
+        "attempts": 5,
+        "rejected": 2,
+        "reject_rate": 0.4,
+        "scenarios": 3,
+        "exhausted": 0
+      },
+      "request": {
+        "attempts": 5,
+        "rejected": 1,
+        "reject_rate": 0.2,
+        "scenarios": 4,
+        "exhausted": 0
+      }
+    },
+    "pii_family": {
+      "account": {
+        "attempts": 3,
+        "rejected": 1,
+        "reject_rate": 0.3333333333333333,
+        "scenarios": 2,
+        "exhausted": 0
+      },
+      "bank": {
+        "attempts": 2,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 2,
+        "exhausted": 0
+      },
+      "card": {
+        "attempts": 3,
+        "rejected": 1,
+        "reject_rate": 0.3333333333333333,
+        "scenarios": 2,
+        "exhausted": 0
+      },
+      "general": {
+        "attempts": 3,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 3,
+        "exhausted": 0
+      },
+      "topup": {
+        "attempts": 2,
+        "rejected": 1,
+        "reject_rate": 0.5,
+        "scenarios": 1,
+        "exhausted": 0
+      }
+    },
+    "resolved": {
+      "false": {
+        "attempts": 6,
+        "rejected": 2,
+        "reject_rate": 0.3333333333333333,
+        "scenarios": 4,
+        "exhausted": 0
+      },
+      "true": {
+        "attempts": 7,
+        "rejected": 1,
+        "reject_rate": 0.14285714285714285,
+        "scenarios": 6,
+        "exhausted": 0
+      }
+    },
+    "escalation_requested": {
+      "false": {
+        "attempts": 13,
+        "rejected": 3,
+        "reject_rate": 0.23076923076923078,
+        "scenarios": 10,
+        "exhausted": 0
+      }
+    },
+    "sentiment": {
+      "negative->negative": {
+        "attempts": 2,
+        "rejected": 1,
+        "reject_rate": 0.5,
+        "scenarios": 1,
+        "exhausted": 0
+      },
+      "negative->neutral": {
+        "attempts": 1,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 1,
+        "exhausted": 0
+      },
+      "neutral->negative": {
+        "attempts": 2,
+        "rejected": 1,
+        "reject_rate": 0.5,
+        "scenarios": 1,
+        "exhausted": 0
+      },
+      "neutral->neutral": {
+        "attempts": 1,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 1,
+        "exhausted": 0
+      },
+      "neutral->positive": {
+        "attempts": 7,
+        "rejected": 1,
+        "reject_rate": 0.14285714285714285,
+        "scenarios": 6,
+        "exhausted": 0
+      }
+    },
+    "pii": {
+      "with": {
+        "attempts": 11,
+        "rejected": 3,
+        "reject_rate": 0.2727272727272727,
+        "scenarios": 8,
+        "exhausted": 0
+      },
+      "without": {
+        "attempts": 2,
+        "rejected": 0,
+        "reject_rate": 0.0,
+        "scenarios": 2,
+        "exhausted": 0
+      }
+    },
+    "customer_turns": {
+      "3": {
+        "attempts": 7,
+        "rejected": 2,
+        "reject_rate": 0.2857142857142857,
+        "scenarios": 5,
+        "exhausted": 0
+      },
+      "4": {
+        "attempts": 6,
+        "rejected": 1,
+        "reject_rate": 0.16666666666666666,
+        "scenarios": 5,
+        "exhausted": 0
+      }
+    },
+    "reroll": {
+      "0": {
+        "attempts": 13,
+        "rejected": 3,
+        "reject_rate": 0.23076923076923078,
+        "scenarios": 10,
+        "exhausted": 0
+      }
+    }
+  },
+  "admitted_free_attributes": {
+    "persona": {
+      "busy customer": 5,
+      "experienced user": 3,
+      "new to mobile banking": 2
+    },
+    "verbosity": {
+      "brief": 4,
+      "moderate": 6
+    },
+    "noise": {
+      "light": 7,
+      "none": 3
+    },
+    "customer_turns": {
+      "3": 5,
+      "4": 5
+    },
+    "reroll": {
+      "0": 10
+    }
+  },
+  "systematic_failures": {},
+  "stopped_reason": null
+}

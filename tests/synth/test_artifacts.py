@@ -101,3 +101,24 @@ def test_v3_1_pilot_reports_unfilled_info_slots_without_relabeling() -> None:
         assert reviewable(sample)
         validate_sample(sample)
         ensure_unique(sample, samples[:index])
+
+
+def test_v3_2_pilot_passed_the_full_run_gate() -> None:
+    directory = ROOT / "data/synthetic/candidates/pilot-v3.2-haiku"
+    run = RunSpec.model_validate_json((directory / "run.json").read_text())
+    report = Report.model_validate_json((directory / "report.json").read_text())
+    samples = load_samples(directory)
+    plan = scenarios(42)
+    assert run.generator_version == "3.2.0" and report.human_approved == 0
+    assert report.candidates == len(samples) == 10
+    assert report.unfilled_indices == [] and report.systematic_failures == {}
+    assert all(
+        stats.reject_rate < 1
+        for values in report.rejections_by_stratum.values()
+        for stats in values.values()
+    )
+    for index, sample in enumerate(samples):
+        assert sample.labels.scenario == plan[sample.labels.scenario.index]
+        assert reviewable(sample)
+        validate_sample(sample)
+        ensure_unique(sample, samples[:index])

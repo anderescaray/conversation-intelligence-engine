@@ -1,0 +1,15 @@
+{
+  "seed": 42,
+  "generator_version": "3.2.0",
+  "model_id": "anthropic:claude-haiku-4-5",
+  "model_revision": "unresolved",
+  "prompt_sha256": "d9563d5eaf94660cc9bc043ea3e7622e19ae3cba67cc9a2bbe81f55532081b76",
+  "judge_model_id": "anthropic:claude-haiku-4-5",
+  "judge_model_revision": "unresolved",
+  "judge_prompt_sha256": "31bc0643eb46cc851890bc1c82db1c10616c76b126c98f700ae5d34bdbc07256",
+  "environment_sha256": "d08b00231e3dbacb8622ed6bb442133dfd8ebf13dc50e0c4e1a03c0ac45ea421",
+  "pii_scan": "patterns+ner",
+  "sample_timeout_s": 120.0,
+  "reasoning": null,
+  "max_rerolls": 2
+}
