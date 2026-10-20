@@ -9,14 +9,13 @@ from convintel.contracts import Sentiment
 from convintel.errors import ConvIntelError
 
 from .plausibility import (
-    END_WEIGHTS,
     ESCALATION_KINDS,
     INTENT_KIND,
     LAST_FOUR_PII,
     PII_FAMILY,
-    RARE_POSITIVE_KINDS,
-    START_WEIGHTS,
+    RULES,
     IntentKind,
+    PlanVersion,
     allowed_pii,
 )
 from .schema import EntityType, Placement, Record, Scenario, ScenarioV3
@@ -295,8 +294,11 @@ def _assign_pii(intents: list[str], rng: random.Random) -> dict[int, list[Entity
     return chosen
 
 
-def scenarios(seed: int) -> tuple[ScenarioV3, ...]:
-    """Plan v3 for golden-v1: v2 channel and intent quotas with plausible labels and PII."""
+def scenarios(seed: int, plan: PlanVersion = 4) -> tuple[ScenarioV3, ...]:
+    """Plans v3/v4 for golden-v1: v2 channel and intent quotas with plausible labels and PII.
+
+    Plan 4 is current (generator 3.2); plan 3 reproduces the generator 3.1 pilot.
+    """
     if seed < 0:
         raise ValueError("seed must be nonnegative")
     rng = random.Random(seed)
@@ -307,8 +309,18 @@ def scenarios(seed: int) -> tuple[ScenarioV3, ...]:
     channels = ["voice" if index % 3 == 2 else "chat" for index in range(150)]
     assigned = [next(voice if channel == "voice" else chat) for channel in channels]
     kinds: list[IntentKind] = [INTENT_KIND[intent] for intent in assigned]
-    resolutions = [False, True] * 75
-    rng.shuffle(resolutions)
+    rules = RULES[plan]
+    if plan == 3:
+        resolutions = [False, True] * 75
+        rng.shuffle(resolutions)
+    else:
+        # Kinds that are always answered take part of the resolved quota; the 75 unresolved
+        # targets fall on the remaining intents, keeping 75/75 overall.
+        fixed = [kinds[i] in rules.always_resolved_kinds for i in range(150)]
+        free = [True] * (75 - sum(fixed)) + [False] * 75
+        rng.shuffle(free)
+        remaining = iter(free)
+        resolutions = [True if fixed[i] else next(remaining) for i in range(150)]
     escalated: set[int] = set()
     for channel, count in (("chat", 20), ("voice", 10)):
         eligible = [
@@ -320,7 +332,9 @@ def scenarios(seed: int) -> tuple[ScenarioV3, ...]:
             [
                 i
                 for i in range(150)
-                if not resolutions[i] and i not in escalated and kinds[i] in RARE_POSITIVE_KINDS
+                if not resolutions[i]
+                and i not in escalated
+                and kinds[i] in rules.rare_positive_kinds
             ],
             3,
         )
@@ -338,12 +352,12 @@ def scenarios(seed: int) -> tuple[ScenarioV3, ...]:
         labels = random.Random(f"{seed}:{index}:labels")
         if index in escalated:
             start = Sentiment.NEGATIVE
-            end = _weighted(labels, END_WEIGHTS[kind, True]) if resolved else Sentiment.NEGATIVE
+            end = _weighted(labels, rules.end[kind, True]) if resolved else Sentiment.NEGATIVE
         elif index in rare_positive:
             start, end = Sentiment.NEUTRAL, Sentiment.POSITIVE
         else:
-            start = _weighted(labels, START_WEIGHTS[kind])
-            end = _weighted(labels, END_WEIGHTS[kind, resolved])
+            start = _weighted(labels, rules.start[kind])
+            end = _weighted(labels, rules.end[kind, resolved])
         slots = [
             Placement(
                 entity_type=entity,
@@ -369,7 +383,8 @@ def scenarios(seed: int) -> tuple[ScenarioV3, ...]:
         result.append(
             ScenarioV3.model_validate(
                 {
-                    "id": f"synth-v3-{seed}-{index:03d}",
+                    "id": f"synth-v{plan}-{seed}-{index:03d}",
+                    "plan_version": plan,
                     "index": index,
                     "seed": seed,
                     "sample_seed": seed_value,
@@ -406,7 +421,7 @@ def reroll(scenario: ScenarioV3, attempt: int) -> ScenarioV3:
 
 
 class PlanReport(Record):
-    plan: str = "synth-v3"
+    plan: str
     seed: int
     size: int
     by_channel: dict[str, int]
@@ -436,6 +451,7 @@ def plan_report(plan: tuple[ScenarioV3, ...]) -> PlanReport:
 
     full = [(s, slot) for s in plan for slot in s.slots if slot.exposure == "full"]
     return PlanReport(
+        plan=plan[0].plan_prefix(),
         seed=plan[0].seed,
         size=len(plan),
         by_channel=dict(Counter(s.channel for s in plan)),
@@ -470,7 +486,7 @@ def plan_report(plan: tuple[ScenarioV3, ...]) -> PlanReport:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Write the scenario plan v3 distribution report")
+    parser = argparse.ArgumentParser(description="Write the current scenario plan report")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

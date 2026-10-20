@@ -103,8 +103,8 @@ async def test_code_compares_observations_with_every_target(
         "intent": "exchange_rate",
         "resolved": not scenario.resolved,
         "escalation_requested": not scenario.escalation_requested,
-        "start_sentiment": "positive",
-        "end_sentiment": "positive",
+        "start_sentiment": "positive" if scenario.start_sentiment != "positive" else "negative",
+        "end_sentiment": "positive" if scenario.end_sentiment != "positive" else "negative",
     }[label]
     observation = observation.model_copy(
         update={label: type(field)(value=wrong, evidence_turns=field.evidence_turns)}

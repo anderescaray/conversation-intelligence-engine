@@ -7,7 +7,7 @@ top-up or an angry opening to a product question. The tables cover the 77 intent
 that every assignment is reviewable; a test enforces that coverage.
 """
 
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from convintel.contracts import Sentiment
 
@@ -111,23 +111,52 @@ def allowed_pii(intent: str) -> tuple[str, ...]:
     )
 
 
-# Sampling weights. A product question never opens angrily and never escalates; a reported
-# problem never opens happily.
-START_WEIGHTS: dict[IntentKind, dict[Sentiment, int]] = {
-    "info": {NEUTRAL: 4, POSITIVE: 1},
+PlanVersion = Literal[3, 4]
+
+
+class LabelRules(NamedTuple):
+    """Sampling weights for one scenario plan; a target is plausible iff its weight exists."""
+
+    start: dict[IntentKind, dict[Sentiment, int]]
+    end: dict[tuple[IntentKind, bool], dict[Sentiment, int]]
+    rare_positive_kinds: frozenset[IntentKind]
+    always_resolved_kinds: frozenset[IntentKind]
+
+
+ESCALATION_KINDS: frozenset[IntentKind] = frozenset({"problem", "request"})
+_PROBLEM_REQUEST_START: dict[IntentKind, dict[Sentiment, int]] = {
     "problem": {NEGATIVE: 3, NEUTRAL: 1},
     "request": {NEUTRAL: 6, NEGATIVE: 3, POSITIVE: 1},
 }
-END_WEIGHTS: dict[tuple[IntentKind, bool], dict[Sentiment, int]] = {
-    ("info", True): {POSITIVE: 1, NEUTRAL: 1},
-    ("info", False): {NEUTRAL: 3, NEGATIVE: 2},
+_PROBLEM_REQUEST_END: dict[tuple[IntentKind, bool], dict[Sentiment, int]] = {
     ("problem", True): {POSITIVE: 4, NEUTRAL: 1},
     ("problem", False): {NEGATIVE: 7, NEUTRAL: 3},
     ("request", True): {POSITIVE: 3, NEUTRAL: 1},
     ("request", False): {NEGATIVE: 1, NEUTRAL: 1},
 }
-ESCALATION_KINDS: frozenset[IntentKind] = frozenset({"problem", "request"})
-RARE_POSITIVE_KINDS: frozenset[IntentKind] = frozenset({"info", "request"})
+# Plan 3 (generator 3.1): a product question never opens angrily and never escalates; a reported
+# problem never opens happily. Its pilot showed informational questions still failing every
+# attempt on an unresolved question, a positive opening or a neutral close.
+# Plan 4 (generator 3.2): informational questions open neutral, are always answered and close
+# positive, so golden-v1 contains no unresolved informational question.
+RULES: dict[PlanVersion, LabelRules] = {
+    3: LabelRules(
+        start={"info": {NEUTRAL: 4, POSITIVE: 1}, **_PROBLEM_REQUEST_START},
+        end={
+            ("info", True): {POSITIVE: 1, NEUTRAL: 1},
+            ("info", False): {NEUTRAL: 3, NEGATIVE: 2},
+            **_PROBLEM_REQUEST_END,
+        },
+        rare_positive_kinds=frozenset({"info", "request"}),
+        always_resolved_kinds=frozenset(),
+    ),
+    4: LabelRules(
+        start={"info": {NEUTRAL: 1}, **_PROBLEM_REQUEST_START},
+        end={("info", True): {POSITIVE: 1}, **_PROBLEM_REQUEST_END},
+        rare_positive_kinds=frozenset({"request"}),
+        always_resolved_kinds=frozenset({"info"}),
+    ),
+}
 
 
 def label_violations(
@@ -137,8 +166,10 @@ def label_violations(
     escalation_requested: bool,
     start: Sentiment,
     end: Sentiment,
+    plan: PlanVersion = 4,
 ) -> list[str]:
     """Return why a label combination is implausible for this intent; empty when allowed."""
+    rules = RULES[plan]
     kind = INTENT_KIND[intent]
     errors: list[str] = []
     if escalation_requested and kind not in ESCALATION_KINDS:
@@ -147,15 +178,18 @@ def label_violations(
         errors.append("escalation must start negative")
     if escalation_requested and not resolved and end != NEGATIVE:
         errors.append("unresolved escalation must end negative")
-    if start not in START_WEIGHTS[kind] and not escalation_requested:
+    if not resolved and kind in rules.always_resolved_kinds:
+        errors.append(f"{kind} intents are always resolved")
+    if start not in rules.start[kind] and not escalation_requested:
         errors.append(f"{kind} intents cannot start {start.value}")
     rare = (
         not resolved
         and not escalation_requested
-        and kind in RARE_POSITIVE_KINDS
+        and kind in rules.rare_positive_kinds
         and (start, end) == (NEUTRAL, POSITIVE)
     )
     unresolved_escalation = escalation_requested and not resolved
-    if not unresolved_escalation and end not in END_WEIGHTS[kind, resolved] and not rare:
+    allowed_end = rules.end.get((kind, resolved), {})
+    if not unresolved_escalation and end not in allowed_end and not rare:
         errors.append(f"{kind} intents cannot end {end.value} when resolved={resolved}")
     return errors

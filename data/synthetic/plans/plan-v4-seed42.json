@@ -1,0 +1,125 @@
+{
+  "plan": "synth-v4",
+  "seed": 42,
+  "size": 150,
+  "by_channel": {
+    "chat": 100,
+    "voice": 50
+  },
+  "by_intent_kind": {
+    "request": 36,
+    "problem": 72,
+    "info": 42
+  },
+  "by_pii_family": {
+    "general": 34,
+    "topup": 6,
+    "account": 22,
+    "bank": 23,
+    "card": 65
+  },
+  "intents_covered": 77,
+  "no_pii_controls": 30,
+  "full_pii_by_type": {
+    "IBAN_CODE": 26,
+    "PHONE_NUMBER": 45,
+    "ACCOUNT_NUMBER": 34,
+    "CREDIT_CARD": 45,
+    "PERSON": 45,
+    "EMAIL_ADDRESS": 45
+  },
+  "full_pii_by_type_and_channel": {
+    "ACCOUNT_NUMBER": {
+      "chat": 23,
+      "voice": 11
+    },
+    "CREDIT_CARD": {
+      "chat": 32,
+      "voice": 13
+    },
+    "EMAIL_ADDRESS": {
+      "chat": 29,
+      "voice": 16
+    },
+    "IBAN_CODE": {
+      "chat": 19,
+      "voice": 7
+    },
+    "PERSON": {
+      "chat": 27,
+      "voice": 18
+    },
+    "PHONE_NUMBER": {
+      "chat": 30,
+      "voice": 15
+    }
+  },
+  "last_four_by_type": {
+    "ACCOUNT_NUMBER": 8,
+    "PHONE_NUMBER": 8,
+    "IBAN_CODE": 4,
+    "CREDIT_CARD": 10
+  },
+  "by_resolved": {
+    "true": 75,
+    "false": 75
+  },
+  "escalation_by_kind": {
+    "request": 10,
+    "problem": 20
+  },
+  "escalation_by_channel": {
+    "chat": 20,
+    "voice": 10
+  },
+  "start_by_kind": {
+    "info": {
+      "neutral": 42
+    },
+    "problem": {
+      "negative": 57,
+      "neutral": 15
+    },
+    "request": {
+      "negative": 18,
+      "neutral": 16,
+      "positive": 2
+    }
+  },
+  "end_by_kind_and_resolved": {
+    "info:resolved=True": {
+      "positive": 42
+    },
+    "problem:resolved=False": {
+      "negative": 46,
+      "neutral": 6
+    },
+    "problem:resolved=True": {
+      "neutral": 5,
+      "positive": 15
+    },
+    "request:resolved=False": {
+      "negative": 12,
+      "neutral": 8,
+      "positive": 3
+    },
+    "request:resolved=True": {
+      "neutral": 3,
+      "positive": 10
+    }
+  },
+  "sentiment_pairs": {
+    "neutral->positive": 52,
+    "negative->negative": 44,
+    "neutral->neutral": 7,
+    "neutral->negative": 14,
+    "negative->neutral": 13,
+    "negative->positive": 18,
+    "positive->neutral": 2
+  },
+  "rare_positive_unresolved": 3,
+  "customer_turns": {
+    "3": 73,
+    "4": 77
+  }
+}

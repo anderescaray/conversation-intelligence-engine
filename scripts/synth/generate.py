@@ -225,6 +225,24 @@ def scaled(total: PhaseUsage, count: int) -> PhaseUsage:
     )
 
 
+def systematic_fields(
+    scenario_id: str, attempts: Sequence[Attempt], max_attempts: int
+) -> tuple[str, ...]:
+    """Labels that every base attempt failed in the judge; non-empty means do not reroll.
+
+    Rerolls only redraw persona, length, noise and PII values. When all base attempts disagree
+    with the same target, the label combination itself is the likely cause, and rerolling only
+    spends money (pilot 3.1: 27 attempts, none rescued).
+    """
+    base = [a for a in attempts if a.id == scenario_id and a.reroll == 0]
+    if len(base) < max_attempts or any(
+        a.accepted or a.category != "judge" or a.judge is None for a in base
+    ):
+        return ()
+    common = set.intersection(*(set(a.judge.failed_labels) for a in base if a.judge))
+    return tuple(sorted(common))
+
+
 def strata(scenario: ScenarioV3) -> dict[str, str]:
     """Dimensions along which rejections are reported, to expose survivorship bias."""
     return {
@@ -514,6 +532,7 @@ async def generate_run(
     spent: float | None = 0.0
     stopped: Literal["max_cost"] | None = None
     exhausted: set[str] = set()
+    systematic: dict[str, list[str]] = {}
     for base in plan:
         replacing = base.index in regenerate
         previous_attempts = [a for a in attempts if a.id == base.id]
@@ -534,6 +553,10 @@ async def generate_run(
         while True:
             if used >= max_attempts:
                 if level >= max_rerolls:
+                    exhausted.add(base.id)
+                    break
+                if level == 0 and (fields := systematic_fields(base.id, attempts, max_attempts)):
+                    systematic[base.id] = list(fields)
                     exhausted.add(base.id)
                     break
                 level, used = level + 1, 0
@@ -567,6 +590,7 @@ async def generate_run(
     samples.sort(key=lambda sample: sample.labels.scenario.index)
     result = report(samples, attempts, n, run, plan=plan, exhausted=exhausted).model_copy(
         update={
+            "systematic_failures": systematic,
             "stopped_reason": stopped,
             "human_approved": sum(
                 (event := decision(s, events)) is not None and event.action == "approve"

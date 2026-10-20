@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, ClassVar, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, create_model, model_validator
 
@@ -10,11 +10,12 @@ from .plausibility import (
     PII_FAMILY,
     IntentKind,
     PIIFamily,
+    PlanVersion,
     allowed_pii,
     label_violations,
 )
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 EntityType = Literal[
     "PERSON", "CREDIT_CARD", "IBAN_CODE", "PHONE_NUMBER", "EMAIL_ADDRESS", "ACCOUNT_NUMBER"
 ]
@@ -37,7 +38,7 @@ class Placement(Slot):
 
 
 class ScenarioData[S: Slot](Record):
-    id: str = Field(pattern=r"^synth-v[123]-[0-9]+-[0-9]{3}$")
+    id: str = Field(pattern=r"^synth-v[1-4]-[0-9]+-[0-9]{3}$")
     index: int = Field(ge=0, lt=150)
     seed: int = Field(ge=0)
     sample_seed: int = Field(ge=0)
@@ -59,14 +60,16 @@ class LegacyScenario(ScenarioData[Slot]):
 class Scenario(ScenarioData[Placement]):
     """Scenario plan v2 (generators 2.0 and 3.0); kept so their candidates stay readable."""
 
-    plan_prefix: ClassVar[str] = "synth-v2"
     intent_description: str = Field(min_length=1)
     start_sentiment: Sentiment
     end_sentiment: Sentiment
 
+    def plan_prefix(self) -> str:
+        return "synth-v2"
+
     @model_validator(mode="after")
     def validate_plan(self) -> "Scenario":
-        if self.id != f"{self.plan_prefix}-{self.seed}-{self.index:03d}":
+        if self.id != f"{self.plan_prefix()}-{self.seed}-{self.index:03d}":
             raise ValueError("scenario version or identity mismatch")
         if self.escalation_requested and self.start_sentiment != Sentiment.NEGATIVE:
             raise ValueError("escalation must start negative")
@@ -104,14 +107,16 @@ class Scenario(ScenarioData[Placement]):
 
 
 class ScenarioV3(Scenario):
-    """Scenario plan v3: PII types and labels sampled only inside per-intent plausibility rules.
+    """Scenario plans v3 and v4: PII and labels sampled only inside per-intent plausibility rules.
+
+    Plan 3 belongs to generator 3.1 and plan 4 to generator 3.2; each is validated against its
+    own `plausibility.RULES`, so earlier candidates stay readable after the rules tighten.
 
     `reroll` > 0 marks a same-stratum replacement: labels, intent, channel and PII plan are kept,
     only free attributes (persona, verbosity, noise, length, PII values) are redrawn.
     """
 
-    plan_prefix: ClassVar[str] = "synth-v3"
-    plan_version: Literal[3] = 3
+    plan_version: PlanVersion
     intent_kind: IntentKind
     pii_family: PIIFamily
     reroll: int = Field(default=0, ge=0, le=2)
@@ -132,10 +137,14 @@ class ScenarioV3(Scenario):
             escalation_requested=self.escalation_requested,
             start=self.start_sentiment,
             end=self.end_sentiment,
+            plan=self.plan_version,
         )
         if errors:
             raise ValueError("; ".join(errors))
         return self
+
+    def plan_prefix(self) -> str:
+        return f"synth-v{self.plan_version}"
 
 
 class DraftTurn(Record):
@@ -564,6 +573,7 @@ class Report(Record):
     admitted_free_attributes: dict[str, dict[str, int]] = Field(
         default_factory=dict[str, dict[str, int]]
     )
+    systematic_failures: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
     stopped_reason: Literal["max_cost"] | None = None
 
 

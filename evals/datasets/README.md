@@ -16,10 +16,10 @@ T03 entrena con Banking77 real. Tampoco implementa el eval runner/CI gate de T11
 
 ## Generación label-first
 
-El generador **3.1.0 / esquema 3** usa el **plan de escenarios v3** (abajo), `prompts/synthetic/v3.yaml`
+El generador **3.2.0 / esquema 3** usa el **plan de escenarios v4** (abajo), `prompts/synthetic/v3.yaml`
 (salida estructurada por turno contra un esqueleto construido por código) y el juez ciego
-`prompts/synthetic_judge/v2.yaml`. 3.1 no cambia ningún prompt, así que la puerta de controles del
-juez sigue vigente. El generador 3.0.0 usaba el plan v2.
+`prompts/synthetic_judge/v2.yaml`. Ni 3.1 ni 3.2 cambian prompts, así que la puerta de controles
+del juez sigue vigente. El generador 3.1.0 usaba el plan v3 y el 3.0.0, el plan v2.
 Los prompts `synthetic/v1`, `synthetic/v2`, `synthetic_judge/v1` y los pilotos v1, v1.1 y v2 son
 históricos e inmutables. El lector conserva sus campos y hashes originales, pero no son elegibles
 para revisión ni golden. No hay conversión implícita de etiquetas.
@@ -28,15 +28,16 @@ para revisión ni golden. No hay conversión implícita de etiquetas.
 (que queda en `run.json` y en `provenance`). Los pilotos del generador 3.0.0 usan el plan v2 y
 conservan `synth-v2-<seed>-<index>`, para compararse sobre los mismos escenarios. El plan v3 cambia
 etiquetas y PII, así que sus muestras usan `synth-v3-<seed>-<index>`: un mismo índice no es el mismo
-escenario en ambos planes. `scenarios.legacy_scenarios(seed)` reproduce el plan v2 y un test
-comprueba que coincide con los candidatos guardados.
+escenario en ambos planes. El plan v4 (generador 3.2) usa `synth-v4-<seed>-<index>`.
+`scenarios.legacy_scenarios(seed)` reproduce el plan v2 y `scenarios(seed, plan=3)` el plan v3; los
+tests comprueban que coinciden con los candidatos guardados de cada piloto.
 
 `scripts.synth.scenarios` construye todo el plan de 150 escenarios antes de invocar al LLM.
 Cada intent tiene una definición breve, escrita en código en `INTENT_DESCRIPTIONS`, almacenada
 con la muestra y enviada al generador y al juez. Son definiciones operativas revisables, no
 utterances ni definiciones supuestamente oficiales de Banking77.
 
-### Plan de escenarios v3 (generador 3.1): plausibilidad por intent
+### Planes de escenarios v3 (generador 3.1) y v4 (generador 3.2): plausibilidad por intent
 
 `scripts/synth/plausibility.py` clasifica explícitamente los 77 intents (un test exige cobertura
 exacta) en **tipo** y **familia de PII**. Solo se muestrea dentro de estas reglas, de modo que el
@@ -44,12 +45,22 @@ generador nunca recibe un objetivo contradictorio; `ScenarioV3` las vuelve a val
 
 | Tipo (intents) | Escalación | Inicio | Final si resuelto | Final si no resuelto |
 | --- | --- | --- | --- | --- |
-| info (22): preguntas de producto o política | nunca | neutral:positivo 4:1 | positivo:neutral 1:1 | neutral:negativo 3:2 |
+| info (22): preguntas de producto o política | nunca | v3: neutral:positivo 4:1 · **v4: neutral** | v3: positivo:neutral 1:1 · **v4: positivo** | v3: neutral:negativo 3:2 · **v4: no existe** |
 | problem (37): algo ha fallado | sí | negativo:neutral 3:1 | positivo:neutral 4:1 | negativo:neutral 7:3 |
 | request (18): el cliente pide una acción | sí | neutral:negativo:positivo 6:3:1 | positivo:neutral 3:1 | negativo:neutral 1:1 |
 
 Las escalaciones empiezan siempre negativas y, si no se resuelven, terminan negativas. Los tres
-casos neutral→positivo sin resolver solo se asignan a info/request, nunca con escalación.
+casos neutral→positivo sin resolver se asignan a info/request en v3 y solo a request en v4, nunca
+con escalación.
+
+**Plan v4.** El piloto 3.1 mostró que las preguntas informativas fallaban en todos los intentos cuando
+se pedía una pregunta sin resolver, un inicio positivo o un final neutral tras la respuesta. En v4,
+las preguntas informativas empiezan neutrales, **siempre se resuelven** y terminan en positivo.
+Para mantener `resolved` 75/75, las 75 no resueltas recaen en problem/request. Con semilla 42
+(`data/synthetic/plans/plan-v4-seed42.json`): 42 info resueltas; problem 20 resueltos y 52 no
+resueltos; request 13 y 23. **Limitación:** golden-v1 no contiene preguntas informativas sin resolver
+ni con inicio positivo o final neutral, y los problemas quedan sesgados hacia no resueltos (72 %).
+Métricas de resolución o sentimiento condicionadas al tipo de intent heredan ese sesgo.
 
 | Familia de PII | Tipos permitidos además de identidad (nombre, teléfono, email) |
 | --- | --- |
@@ -65,7 +76,7 @@ por los escenarios con menos opciones. Las cuotas exactas se mantienen: 100 chat
 problem/request), 30 controles sin PII, 240 valores completos y 30 confirmaciones `last_four`. El
 sentimiento no tiene cuota exacta: se muestrea con estos pesos.
 
-Reparto de los 150 con semilla 42 (`data/synthetic/plans/plan-v3-seed42.json`):
+Reparto de los 150 con semilla 42 (`plan-v3-seed42.json`; el plan v4 tiene los mismos totales por tipo):
 
 | Tipo de PII | Plan v2 | Plan v3 |
 | --- | ---: | ---: |
@@ -77,10 +88,11 @@ Reparto de los 150 con semilla 42 (`data/synthetic/plans/plan-v3-seed42.json`):
 | `IBAN_CODE` | 32 | **26** |
 
 El IBAN baja porque solo es plausible en 17 intents. Confirmaciones `last_four`: tarjeta 13,
-teléfono 7, IBAN 5, cuenta 5. Tipos de intent en el plan: problem 72, info 42, request 36.
+teléfono 7, IBAN 5, cuenta 5 en v3, y tarjeta 10, teléfono 8, cuenta 8, IBAN 4 en v4. Tipos de
+intent en el plan: problem 72, info 42, request 36.
 
 ```bash
-uv run python -m scripts.synth.scenarios --seed 42 --output data/synthetic/plans/plan-v3-seed42.json
+uv run python -m scripts.synth.scenarios --seed 42 --output data/synthetic/plans/plan-v4-seed42.json
 ```
 
 ### Reposición y sesgo de supervivencia
@@ -93,6 +105,11 @@ conservan exactamente. Sin éxito tras dos re-sorteos, el hueco queda en `unfill
 código de salida no cero; **nunca** se cambian etiquetas, intent ni canal para rellenarlo. Un fallo
 sistemático en un estrato señala una regla de plausibilidad mal puesta: se corrige el plan con una
 versión nueva. Los 120 s por muestra cubren el hueco completo, re-sorteos incluidos, con un máximo de 9 intentos.
+
+Desde 3.2, si los tres intentos base (`reroll=0`) son rechazos del juez que comparten al menos un
+campo fallido, **no se re-sortea**. El hueco queda sin rellenar y `report.json` lo registra en
+`systematic_failures` (ID → campos comunes). En el piloto 3.1, re-sortear esos casos costó 27
+intentos sin rescatar ninguno.
 
 Los re-sorteos pueden favorecer atributos «fáciles». Por eso `report.json` publica `rerolled_ids`,
 `admitted_free_attributes` y `rejections_by_stratum`: intentos, rechazos, tasa, escenarios y huecos

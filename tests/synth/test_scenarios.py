@@ -14,7 +14,7 @@ def test_reproducible_full_golden_plan() -> None:
     assert set(counts) == set(INTENTS)
     assert Counter(counts.values()) == {2: 73, 1: 4}
     assert {s.intent for s in plan if s.channel == "chat"} == set(INTENTS)
-    assert any(s.escalation_requested for s in plan[:10])
+    assert any(s.escalation_requested for s in plan[:15])
     assert any(s.channel == "voice" and s.slots for s in plan[:10])
     assert all("customer_trajectory" not in s.model_dump() for s in plan)
     assert set(INTENT_DESCRIPTIONS) == set(INTENTS)

@@ -35,7 +35,7 @@ def test_unknown_or_malformed_placeholders_rejected(draft_factory: Callable, tex
 
 
 def test_missing_placeholder_and_escalation_rejected(draft_factory: Callable) -> None:
-    scenario = scenarios(42)[4]
+    scenario = scenarios(42)[13]
     assert scenario.escalation_requested and scenario.slots
     draft = draft_factory(scenario)
     draft.turns[0] = DraftTurn(speaker="customer", text="My issue is still open.")

@@ -91,7 +91,7 @@ def test_v3_1_pilot_reports_unfilled_info_slots_without_relabeling() -> None:
     run = RunSpec.model_validate_json((directory / "run.json").read_text())
     report = Report.model_validate_json((directory / "report.json").read_text())
     samples = load_samples(directory)
-    plan = scenarios(42)
+    plan = scenarios(42, plan=3)
     assert run.generator_version == "3.1.0" and run.max_rerolls == 2
     assert report.candidates == len(samples) == 7 and report.human_approved == 0
     assert report.unfilled_indices == [5, 7, 8] and report.stopped_reason is None

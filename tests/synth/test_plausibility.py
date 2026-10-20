@@ -16,6 +16,7 @@ from scripts.synth.plausibility import (
     INTENT_KIND,
     LAST_FOUR_PII,
     PII_FAMILY,
+    PlanVersion,
     allowed_pii,
     label_violations,
 )
@@ -27,7 +28,14 @@ from scripts.synth.scenarios import (
     reroll,
     scenarios,
 )
-from scripts.synth.schema import Attempt, Draft, JudgeObservation, ScenarioV3
+from scripts.synth.schema import (
+    Attempt,
+    Draft,
+    JudgeObservation,
+    ObservedFlag,
+    ObservedIntent,
+    ScenarioV3,
+)
 from scripts.synth.storage import load_samples, read_jsonl
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,11 +51,19 @@ def test_tables_cover_exactly_the_77_intents() -> None:
     assert "CREDIT_CARD" not in allowed_pii("cancel_transfer")
 
 
+@pytest.mark.parametrize("plan_version", [3, 4])
 @pytest.mark.parametrize("seed", range(10))
-def test_plan_v3_keeps_quotas_and_samples_only_plausible_targets(seed: int) -> None:
-    plan = scenarios(seed)
-    assert plan == scenarios(seed) and len(plan) == 150
-    assert all(isinstance(s, ScenarioV3) and s.id == f"synth-v3-{seed}-{s.index:03d}" for s in plan)
+def test_plans_keep_quotas_and_sample_only_plausible_targets(
+    seed: int, plan_version: PlanVersion
+) -> None:
+    plan = scenarios(seed, plan=plan_version)
+    assert plan == scenarios(seed, plan=plan_version) and len(plan) == 150
+    assert all(
+        isinstance(s, ScenarioV3)
+        and s.plan_version == plan_version
+        and s.id == f"synth-v{plan_version}-{seed}-{s.index:03d}"
+        for s in plan
+    )
     assert Counter(s.channel for s in plan) == {"chat": 100, "voice": 50}
     counts = Counter(s.intent for s in plan)
     assert set(counts) == set(INTENTS) and Counter(counts.values()) == {2: 73, 1: 4}
@@ -67,11 +83,15 @@ def test_plan_v3_keeps_quotas_and_samples_only_plausible_targets(seed: int) -> N
             escalation_requested=s.escalation_requested,
             start=s.start_sentiment,
             end=s.end_sentiment,
+            plan=plan_version,
         )
         if s.intent_kind == "info":
             assert not s.escalation_requested and s.start_sentiment != Sentiment.NEGATIVE
         if s.intent_kind == "problem":
             assert s.start_sentiment != Sentiment.POSITIVE
+        if s.intent_kind == "info" and plan_version == 4:
+            assert s.resolved
+            assert (s.start_sentiment, s.end_sentiment) == (Sentiment.NEUTRAL, Sentiment.POSITIVE)
     unresolved_positive = [
         s
         for s in plan
@@ -291,3 +311,103 @@ async def test_max_cost_must_be_positive(tmp_path: Path, settings: Settings) -> 
             model_revision="test",
             max_cost_usd=0,
         )
+
+
+def test_plan_4_moves_the_unresolved_quota_to_problem_and_request() -> None:
+    plan = scenarios(42)
+    unresolved = Counter(s.intent_kind for s in plan if not s.resolved)
+    assert sum(unresolved.values()) == 75 and "info" not in unresolved
+    assert {
+        s.intent_kind
+        for s in plan
+        if not s.resolved and s.end_sentiment == "positive" and not s.escalation_requested
+    } == {"request"}
+    report = plan_report(plan)
+    assert report.plan == "synth-v4" and report.start_by_kind["info"] == {"neutral": 42}
+
+
+@pytest.mark.parametrize(
+    ("update", "message"),
+    [
+        ({"resolved": False}, "always resolved"),
+        ({"end_sentiment": "neutral"}, "cannot end neutral"),
+        ({"start_sentiment": "positive"}, "cannot start positive"),
+    ],
+)
+def test_plan_4_rejects_the_informational_targets_that_failed_pilot_3_1(
+    update: dict[str, object], message: str
+) -> None:
+    info = next(s for s in scenarios(42) if s.intent_kind == "info")
+    with pytest.raises(ValidationError, match=message):
+        ScenarioV3.model_validate({**info.model_dump(), **update})
+    legacy = next(s for s in scenarios(42, plan=3) if s.intent_kind == "info")
+    assert legacy.plan_version == 3
+
+
+def _judged(
+    scenario: ScenarioV3, labels: tuple[str, ...], observation: JudgeObservation
+) -> JudgeObservation:
+    flipped = {
+        "resolved": ObservedFlag(
+            value=not scenario.resolved, evidence_turns=observation.resolved.evidence_turns
+        ),
+        "intent": ObservedIntent(value="exchange_rate", evidence_turns=(0,)),
+    }
+    return observation.model_copy(update={label: flipped[label] for label in labels})
+
+
+@pytest.mark.parametrize(
+    ("failures", "systematic"),
+    [
+        ((("resolved",), ("resolved", "intent"), ("resolved",)), True),
+        ((("resolved",), ("intent",), ("resolved",)), False),
+    ],
+)
+async def test_same_field_base_failures_skip_rerolls(
+    tmp_path: Path,
+    settings: Settings,
+    skeleton_draft: Callable,
+    judge_observation: Callable,
+    failures: tuple[tuple[str, ...], ...],
+    systematic: bool,
+) -> None:
+    base = scenarios(42)[0]
+    assert base.intent != "exchange_rate"
+    responses = []
+    for labels in failures:
+        responses += [
+            tool_answer(Draft, skeleton_draft(base).model_dump()),
+            tool_answer(
+                JudgeObservation, _judged(base, labels, judge_observation(base)).model_dump()
+            ),
+        ]
+    if not systematic:
+        for k in (1, 1, 1, 2, 2, 2):
+            variant = reroll(base, k)
+            responses += [
+                tool_answer(Draft, skeleton_draft(variant).model_dump()),
+                tool_answer(
+                    JudgeObservation,
+                    _judged(variant, ("resolved",), judge_observation(variant)).model_dump(),
+                ),
+            ]
+    model = FakeStructuredChatModel(responses=responses)
+    directory = tmp_path / "pilot"
+    result = await generate_run(
+        directory,
+        LLMClient(settings, chat_model=model),
+        settings,
+        seed=42,
+        n=1,
+        model_revision="test",
+        max_attempts=3,
+    )
+    attempts = read_jsonl(directory / "attempts.jsonl", Attempt)
+    assert result.unfilled_indices == [0]
+    if systematic:
+        assert result.systematic_failures == {base.id: ["resolved"]}
+        assert len(attempts) == 3 and result.rerolled_ids == []
+    else:
+        assert result.systematic_failures == {}
+        assert len(attempts) == 9 and result.rerolled_ids == [base.id]
+    assert not model.responses
