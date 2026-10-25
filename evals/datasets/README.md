@@ -586,6 +586,18 @@ No cambia ningún dato. Los 47 huecos cambiados, más los 18 sin rellenar, queda
 regenerar. **La regeneración se aplaza a noviembre por presupuesto.** Los dos cambios de intent
 (`synth-v4-42-079` y `synth-v4-42-092`) se revisan a mano antes.
 
+**Revisión humana de las dos alarmas de intent (Ander, 2026-10-25): el juez acierta en las dos.**
+En ambas el cliente no reconoce el cargo, que es `card_payment_not_recognised`, y nada indica una
+comisión adicional sobre una compra conocida. El inicio de 079 es un informe tranquilo, así que
+también acierta con el neutral. El juez Haiku anterior las había aceptado erróneamente.
+**Causa raíz en la taxonomía:** la descripción de `extra_charge_on_statement` dice «unexplained»,
+lo que se solapa con «not recognised» de `card_payment_not_recognised`.
+
+**Pendiente para noviembre, antes de regenerar:**
+1. Auditar ese par contra el split de train de Banking77, en local.
+2. Si se confirma el solapamiento, crear las descripciones de intent v3 como versión nueva, sin
+   tocar la v2, con un juez nuevo ligado a ellas.
+
 ## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
 
 **Guía de etiquetado.** `evals/datasets/labeling-guide-v1.md` es inmutable y se incrusta literalmente
