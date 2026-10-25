@@ -1,5 +1,6 @@
 """Client-facing analysis endpoint and operational probes."""
 
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -19,7 +20,8 @@ async def transcribe_spooled(
     conversation: Conversation, audio_uri: str, spool: AudioSpool, transcriber: Transcriber
 ) -> Conversation:
     """Transcribe a spooled recording, keeping the caller's start time and metadata."""
-    path = spool.resolve(audio_uri)
+    # resolve() stats and probes the file; keep that blocking I/O off the event loop.
+    path = await asyncio.to_thread(spool.resolve, audio_uri)
     transcribed = await transcriber.transcribe(str(path), conversation.id)
     return transcribed.model_copy(
         update={
@@ -45,7 +47,7 @@ async def analyze_conversation(
             )
         elif conversation.audio_uri is not None:
             # Even with turns present, an unchecked audio_uri must never travel downstream.
-            spool.resolve(conversation.audio_uri)
+            await asyncio.to_thread(spool.resolve, conversation.audio_uri)
         elif not conversation.turns:
             raise HTTPException(422, "A conversation needs turns or an audio_uri.")
         return await pipeline.analyze(conversation)
