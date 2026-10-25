@@ -26,6 +26,7 @@ class ModelPrice(BaseModel):
 
 PRICES: dict[tuple[LLMProvider, str], ModelPrice] = {
     ("anthropic", "claude-haiku-4-5"): ModelPrice(input_per_mtok=1.00, output_per_mtok=5.00),
+    ("anthropic", "claude-sonnet-5-5"): ModelPrice(input_per_mtok=2.00, output_per_mtok=10.00),
     ("ollama", ANY_MODEL): ModelPrice(input_per_mtok=0.0, output_per_mtok=0.0),
 }
 
