@@ -1,4 +1,4 @@
-"""Price table for LLM cost accounting.
+"""Price and sampling-capability tables for LLM cost accounting and model construction.
 
 Lives here rather than in `Settings` because prices are reviewed code, not per-deployment
 config: a wrong price silently skews the cost SLO, so changes should go through a PR.
@@ -29,6 +29,18 @@ PRICES: dict[tuple[LLMProvider, str], ModelPrice] = {
     ("anthropic", "claude-sonnet-5-5"): ModelPrice(input_per_mtok=2.00, output_per_mtok=10.00),
     ("ollama", ANY_MODEL): ModelPrice(input_per_mtok=0.0, output_per_mtok=0.0),
 }
+
+REJECTS_SAMPLING_PARAMETERS: frozenset[tuple[LLMProvider, str]] = frozenset(
+    {("anthropic", "claude-sonnet-5-5")}
+)
+"""Models whose API refuses non-default sampling parameters; they run at the provider default."""
+
+
+def effective_temperature(provider: LLMProvider, model: str, temperature: float) -> float | None:
+    """The temperature actually sent, or None when the provider default applies."""
+    if (provider, model) in REJECTS_SAMPLING_PARAMETERS:
+        return None
+    return temperature
 
 
 def compute_cost(

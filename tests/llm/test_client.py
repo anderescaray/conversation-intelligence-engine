@@ -7,7 +7,7 @@ import ollama
 import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_ollama import ChatOllama
 from prometheus_client import REGISTRY
 from pydantic import BaseModel, Field, SecretStr
@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, SecretStr
 from convintel.config import Settings
 from convintel.errors import LLMError
 from convintel.llm import LLMClient, build_chat_model, load_prompt
+from convintel.llm.pricing import effective_temperature
 from convintel.llm.prompts import Prompt
 from convintel.llm.testing import FakeStructuredChatModel, no_sleep, tool_answer
 
@@ -339,6 +340,23 @@ async def test_switching_provider_is_config_only(
     response = await client.structured(Answer, prompt, operator="demo", conversation="hi")
     assert response.model_id == model_id
     assert response.cost_usd == pytest.approx(expected_cost)
+
+
+@pytest.mark.parametrize(
+    ("model", "sent"), [("claude-sonnet-5-5", None), ("claude-haiku-4-5", 0.0)]
+)
+def test_temperature_is_omitted_only_for_models_that_reject_it(
+    model: str, sent: float | None
+) -> None:
+    chat = build_chat_model(_settings(llm_provider="anthropic", llm_model=model), temperature=0)
+    assert isinstance(chat, ChatAnthropic) and chat.model == model
+    assert chat.temperature == sent
+    assert effective_temperature("anthropic", model, 0) == sent
+    # What reaches the API (langchain routes sampling parameters through extra_body).
+    payload = chat._get_request_payload([HumanMessage("hi")])  # pyright: ignore[reportPrivateUsage]
+    sent_body = payload.get("extra_body") or {}
+    assert "temperature" not in payload
+    assert sent_body.get("temperature") == sent
 
 
 def test_summary_prompt_model_does_not_override_settings() -> None:

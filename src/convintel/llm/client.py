@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from convintel.config import Settings, get_settings
 from convintel.errors import LLMError
 from convintel.llm.metrics import LLM_COST_USD, LLM_TOKENS
-from convintel.llm.pricing import compute_cost
+from convintel.llm.pricing import compute_cost, effective_temperature
 from convintel.llm.prompts import Prompt
 
 logger = logging.getLogger(__name__)
@@ -74,6 +74,8 @@ def _is_retryable(exc: BaseException) -> bool:
 def build_chat_model(settings: Settings, *, temperature: float) -> BaseChatModel:
     """Instantiate the configured provider's chat model. Construction does no network I/O."""
     provider, model = settings.llm_provider, settings.llm_model
+    effective = effective_temperature(provider, model, temperature)
+    sampling: dict[str, Any] = {} if effective is None else {"temperature": effective}
     match provider:
         case "anthropic":
             if settings.anthropic_api_key is None:
@@ -83,7 +85,7 @@ def build_chat_model(settings: Settings, *, temperature: float) -> BaseChatModel
             chat = init_chat_model(
                 model,
                 model_provider="anthropic",
-                temperature=temperature,
+                **sampling,
                 api_key=settings.anthropic_api_key.get_secret_value(),
                 # LLMClient owns retries; SDK retries would multiply attempts and hide backoff.
                 max_retries=0,
@@ -92,7 +94,7 @@ def build_chat_model(settings: Settings, *, temperature: float) -> BaseChatModel
             chat = init_chat_model(
                 model,
                 model_provider="ollama",
-                temperature=temperature,
+                **sampling,
                 base_url=settings.ollama_base_url,
             )
         case "google" | "openai":

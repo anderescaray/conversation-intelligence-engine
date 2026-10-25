@@ -47,6 +47,9 @@ response.output, response.cost_usd, prompt.id  # Persona(...), USD or None, "my_
   API key all raise `convintel.errors.LLMError`. Other exceptions are bugs and propagate.
 - **Cost:** `pricing.PRICES` holds USD per million tokens. Ollama is free. If a model is not
   in the table, `cost_usd` is `None` (unknown, not zero) and a warning is logged.
+- **Sampling:** models in `pricing.REJECTS_SAMPLING_PARAMETERS` (e.g. `claude-sonnet-5-5`) refuse a
+  non-default temperature, so the prompt's `temperature` is not sent and the provider default
+  applies; their output is not deterministic. `pricing.effective_temperature` reports what was sent.
 - **Telemetry:** counters `convintel_llm_tokens_total{model,direction}` and
   `convintel_llm_cost_usd_total{model,operator}`. Provider-call spans come from OpenInference's
   LangChain instrumentation, which the telemetry lane sets up. Prompt and conversation text is
