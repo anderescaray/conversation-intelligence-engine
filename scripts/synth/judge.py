@@ -5,9 +5,10 @@ from typing import Any, Literal, cast
 
 from pydantic import create_model
 
-from convintel.config import Settings
+from convintel.config import LLMProvider, Settings
 from convintel.errors import ConvIntelError
 from convintel.llm import LLMClient, LLMResponse, build_chat_model, load_prompt, wrap_conversation
+from convintel.llm.pricing import effective_temperature
 from convintel.llm.prompts import Prompt
 from convintel.telemetry import traced
 
@@ -32,6 +33,12 @@ JUDGE_PROMPT_VERSION = 4
 # Each judge prompt version is bound to the descriptions it was run with, so a stored verdict
 # stays verifiable after the taxonomy changes.
 JUDGE_TAXONOMY: dict[int, TaxonomyVersion] = {2: 1, 3: 2, 4: 2}
+
+
+def sent_temperature(client: LLMClient, prompt: Prompt) -> float | None:
+    """The temperature the provider received; None is its default, which is not deterministic."""
+    provider, model = client.model_id.split(":", 1)
+    return effective_temperature(cast(LLMProvider, provider), model, prompt.temperature)
 
 
 def taxonomy_text(version: TaxonomyVersion) -> str:
@@ -166,7 +173,7 @@ async def judge_sample(client: LLMClient, sample: Sample, run: RunSpec) -> Judge
         prompt_version=prompt.id,
         prompt_sha256=run.judge_prompt_sha256,
         input_sha256=digest(data),
-        temperature=prompt.temperature,
+        temperature=sent_temperature(client, prompt),
         reasoning=False if client.model_id.startswith("ollama:") else None,
         input_tokens=response.input_tokens,
         output_tokens=response.output_tokens,

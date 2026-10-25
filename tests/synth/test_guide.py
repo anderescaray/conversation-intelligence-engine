@@ -263,6 +263,7 @@ async def test_rejudge_keeps_text_and_labels_and_reports_flips_by_field(
     report = await rejudge(source, output, LLMClient(settings, chat_model=model))
     assert (report.kept, report.flipped, report.flipped_indices) == (1, 1, [3])
     assert report.flips_by_field == {"resolved": 1} and report.taxonomy_version == 2
+    assert report.judge_temperature == 0.0
     sample = load_samples(output)[0]
     assert sample.conversation == kept.conversation and reviewable(sample)
     assert isinstance(sample.labels, Annotation) and isinstance(sample.labels.scenario, ScenarioV3)

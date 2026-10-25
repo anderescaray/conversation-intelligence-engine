@@ -387,7 +387,8 @@ class JudgeRecord(Record):
     prompt_version: str
     prompt_sha256: str
     input_sha256: str
-    temperature: float
+    # None: the model rejects sampling parameters and ran at the provider default.
+    temperature: float | None
     reasoning: bool | None = None
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)

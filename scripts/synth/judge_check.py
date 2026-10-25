@@ -19,7 +19,13 @@ from convintel.errors import ConvIntelError, LLMError
 from convintel.llm import LLMClient, load_prompt
 from convintel.telemetry import traced
 
-from .judge import JUDGE_PROMPT_VERSION, configured_client, evidence_errors, observe
+from .judge import (
+    JUDGE_PROMPT_VERSION,
+    configured_client,
+    evidence_errors,
+    observe,
+    sent_temperature,
+)
 from .schema import (
     LABELS,
     VERSION,
@@ -79,6 +85,8 @@ class GateReport(Record):
     generator_version: str = VERSION
     judge_model_id: str
     judge_model_revision: str
+    # None: the provider default applied, so the judge is not deterministic.
+    judge_temperature: float | None
     prompt_version: str
     prompt_sha256: str
     controls_sha256: str
@@ -125,6 +133,7 @@ def summarise(
     *,
     judge_model_id: str,
     judge_model_revision: str,
+    judge_temperature: float | None,
     prompt_version: str,
     prompt_sha256: str,
     controls_sha256: str,
@@ -139,6 +148,7 @@ def summarise(
     return GateReport(
         judge_model_id=judge_model_id,
         judge_model_revision=judge_model_revision,
+        judge_temperature=judge_temperature,
         prompt_version=prompt_version,
         prompt_sha256=prompt_sha256,
         controls_sha256=controls_sha256,
@@ -201,6 +211,7 @@ async def run_gate(
             results,
             judge_model_id=client.model_id,
             judge_model_revision=model_revision,
+            judge_temperature=sent_temperature(client, prompt),
             prompt_version=prompt.id,
             prompt_sha256=digest(prompt),
             controls_sha256=await asyncio.to_thread(file_hash, controls_path),

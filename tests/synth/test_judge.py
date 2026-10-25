@@ -16,6 +16,7 @@ from scripts.synth.judge import (
     judge_input,
     judge_sample,
     reviewable,
+    sent_temperature,
 )
 from scripts.synth.judge_check import DEFAULT_CONTROLS, Control, load_controls, run_gate
 from scripts.synth.plausibility import INTENT_KIND
@@ -237,6 +238,7 @@ async def test_gate_passes_a_truthful_judge_and_reports_counts(
     assert report.gate_passed and report.passed_controls == "26/26"
     assert report.field_correct == {label: "26/26" for label in LABELS}
     assert report.judge_model_id == "ollama:qwen3:8b" and report.cost_usd == 0
+    assert report.judge_temperature == 0.0
     assert {s.name for s in spans.get_finished_spans()} >= {
         "synthetic.judge",
         "synthetic.judge_check",
@@ -395,3 +397,10 @@ def test_gate_v3_keeps_gate_v2_verbatim_and_adds_borderline_sentiment_controls()
     # Different wording from ctl-10 and the guide examples, so passing is not memorisation.
     text = " ".join(turn.text.lower() for c in new for turn in c.turns)
     assert not any(word in text for word in ("annoying", "frustrating", "worried"))
+
+
+def test_judge_temperature_records_the_provider_default_for_sonnet() -> None:
+    prompt = load_prompt("synthetic_judge", JUDGE_PROMPT_VERSION)
+    for model, sent in (("claude-sonnet-5-5", None), ("claude-haiku-4-5", 0.0)):
+        settings = Settings(_env_file=None, llm_provider="anthropic", llm_model=model)  # pyright: ignore[reportCallIssue]
+        assert sent_temperature(LLMClient(settings), prompt) == sent

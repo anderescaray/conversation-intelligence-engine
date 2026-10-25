@@ -21,7 +21,13 @@ from convintel.llm.pricing import compute_cost
 from convintel.telemetry import traced
 
 from .generate import default_model, usage
-from .judge import JUDGE_PROMPT_VERSION, JUDGE_TAXONOMY, configured_client, judge_sample
+from .judge import (
+    JUDGE_PROMPT_VERSION,
+    JUDGE_TAXONOMY,
+    configured_client,
+    judge_sample,
+    sent_temperature,
+)
 from .schema import VERSION, Annotation, JudgeRecord, Record, RunSpec, Sample, ScenarioV3
 from .storage import append_jsonl, digest, load_samples, read_jsonl, write_json, write_jsonl
 from .taxonomy import DESCRIPTIONS
@@ -35,6 +41,7 @@ class RejudgeRun(Record):
     judge_model_id: str
     judge_model_revision: str
     judge_prompt_sha256: str
+    judge_temperature: float | None
     taxonomy_version: int
 
 
@@ -56,6 +63,8 @@ class RejudgeReport(Record):
     source: str
     judge_model_id: str
     judge_prompt_version: str
+    # None: the provider default applied, so the judge is not deterministic.
+    judge_temperature: float | None
     taxonomy_version: int
     total: int
     judged: int
@@ -121,6 +130,7 @@ async def rejudge(
         judge_model_id=client.model_id,
         judge_model_revision=judge_model_revision,
         judge_prompt_sha256=digest(prompt),
+        judge_temperature=sent_temperature(client, prompt),
         taxonomy_version=JUDGE_TAXONOMY[JUDGE_PROMPT_VERSION],
     )
     await asyncio.to_thread(prepare_output, output, spec, resume)
@@ -196,6 +206,7 @@ async def rejudge(
         source=str(source),
         judge_model_id=client.model_id,
         judge_prompt_version=prompt.id,
+        judge_temperature=spec.judge_temperature,
         taxonomy_version=spec.taxonomy_version,
         total=len(samples),
         judged=len(records),
