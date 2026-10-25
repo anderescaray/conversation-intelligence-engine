@@ -577,6 +577,15 @@ ninguno por evidencia o error. Coste 2,12 USD (estimación previa 2,07), 318 s.
 regeneró ni se fusionó nada. Tras el re-juicio, 12 intents se quedan sin candidatos, que se suman
 a los 5 que ya faltaban.
 
+**Decisión de Ander (2026-10-25): se aceptan los 47 cambios** como el efecto esperado de la guía v2.
+- Ningún campo superó su propio límite (2 × previstos + 5).
+- Los 30 cambios de inicio estaban todos previstos.
+- El límite total de 45 era una cifra aproximada, fijada antes de tener la predicción.
+
+No cambia ningún dato. Los 47 huecos cambiados, más los 18 sin rellenar, quedan pendientes de
+regenerar. **La regeneración se aplaza a noviembre por presupuesto.** Los dos cambios de intent
+(`synth-v4-42-079` y `synth-v4-42-092`) se revisan a mano antes.
+
 ## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
 
 **Guía de etiquetado.** `evals/datasets/labeling-guide-v1.md` es inmutable y se incrusta literalmente
