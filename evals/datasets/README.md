@@ -17,7 +17,8 @@ T03 entrena con Banking77 real. Tampoco implementa el eval runner/CI gate de T11
 ## Generación label-first
 
 El generador **3.4.0 / esquema 3** usa `prompts/synthetic/v5.yaml` y `prompts/synthetic_judge/v4.yaml`, que
-comparten la guía de etiquetado v2 (sección «Generador 3.4»); su puerta v3 **no ha pasado**.
+comparten la guía de etiquetado v2 (sección «Generador 3.4»); el juez es `claude-sonnet-5-5`, que pasa la
+puerta v3 (26/26 dos veces), y el generador sigue siendo Haiku.
 El generador **3.3.0 / esquema 3** usaba el plan de escenarios v4 con la taxonomía v2, `prompts/synthetic/v4.yaml`
 y `prompts/synthetic_judge/v3.yaml`, que comparten la guía de etiquetado v1 (sección «Generador 3.3»).
 El generador **3.2.0** usaba el **plan de escenarios v4** (abajo), `prompts/synthetic/v3.yaml`
@@ -530,6 +531,22 @@ una preocupación leve («I'm a little concerned it will happen again»), y el j
 neutral. La regla nueva se aplica en el primer turno (`ctl-10`, `ctl-23`), pero no en un cierre
 negativo leve que sigue a una resolución. Siguiendo la regla acordada, no se ajustaron prompts
 ni controles, y no se ejecutaron la predicción, el re-juicio ni la regeneración.
+
+**Cambio de modelo del juez: Sonnet.** El fallo de Haiku en `ctl-24` es un sesgo «resuelto → final
+neutral» (la misma pauta que los huecos de la ejecución 3.2). La guía v2 ya dice «any explicit
+expression of negative emotion», sin limitarlo al primer turno, así que la especificación es clara y
+lo que falla es la capacidad del modelo, no la guía. Por eso solo cambia el modelo del juez, a
+`claude-sonnet-5-5`, con el mismo prompt v4 y la misma puerta v3. El generador sigue siendo Haiku.
+Hicieron falta dos cambios en `src/convintel/llm`, aprobados por Ander: el precio de Sonnet
+(2/10 USD por millón de tokens) y no enviar `temperature` a los modelos que la rechazan.
+
+**El juez Sonnet no es determinista.** Sonnet 5.5 rechaza una temperatura distinta de la de por
+defecto, así que corre con la del proveedor. Los informes lo registran como `judge_temperature: null`
+(y `temperature: null` en cada veredicto). Por eso la puerta se pasó dos veces:
+`claude-sonnet-5-5-gate-v3-run1.json` y `-run2.json`, **26/26 en ambas** (0,407 USD y 60 s cada
+una). Las dos ejecuciones dan los mismos valores en los 130 campos y solo difieren en los turnos de
+evidencia citados en 13 campos, todos válidos. Dos ejecuciones no miden la variabilidad: solo
+descartan que el aprobado dependa de una ejecución favorable.
 
 ## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
 
