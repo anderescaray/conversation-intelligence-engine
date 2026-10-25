@@ -23,6 +23,7 @@ from convintel.operators.intent import (
     softmax,
 )
 from convintel.operators.intent import operator as operator_module
+from convintel.telemetry import traced
 
 C, A = Speaker.CUSTOMER, Speaker.AGENT
 
@@ -173,9 +174,10 @@ async def test_a_missing_model_surfaces_its_explicit_message() -> None:
 
 async def test_span_has_metadata_but_no_text(spans: InMemorySpanExporter) -> None:
     text = "my card is gone"
-    fake = FakeIntentModel({text: LOST_CARD})
+    operator = IntentOperator(model=FakeIntentModel({text: LOST_CARD}))
 
-    await IntentOperator(model=fake).run(make_conversation((C, text), conversation_id="c-42"))
+    with traced(f"operator.{operator.name}", version=operator.version):
+        await operator.run(make_conversation((C, text), conversation_id="c-42"))
 
     (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.intent"]
     attributes = dict(span.attributes or {})
@@ -190,13 +192,23 @@ async def test_span_has_metadata_but_no_text(spans: InMemorySpanExporter) -> Non
 async def test_failed_span_records_the_type_only(spans: InMemorySpanExporter) -> None:
     operator = IntentOperator(model=FailingIntentModel(RuntimeError("raw text here")))
 
-    with pytest.raises(OperatorError):
+    with (
+        pytest.raises(OperatorError),
+        traced(f"operator.{operator.name}", version=operator.version),
+    ):
         await operator.run(make_conversation((C, "x")))
 
     (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.intent"]
     assert span.status.status_code is StatusCode.ERROR
     assert (span.attributes or {})["error.type"] == "OperatorError"
     assert not span.events
+
+
+async def test_run_does_not_open_its_own_span(spans: InMemorySpanExporter) -> None:
+    # The pipeline measures operators; a span here would double-count latency and errors.
+    await IntentOperator(model=FakeIntentModel({"x": LOST_CARD})).run(make_conversation((C, "x")))
+
+    assert not [s for s in spans.get_finished_spans() if s.name.startswith("operator.intent")]
 
 
 async def test_warmup_loads_the_model_once_and_runs_one_inference(

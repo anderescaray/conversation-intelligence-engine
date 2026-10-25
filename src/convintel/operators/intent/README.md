@@ -100,9 +100,11 @@ descriptions = intent_descriptions(3)  # read-only Mapping[label, description]
 
 ## Telemetry
 
-- `operator.intent` span via `traced`, which also records `convintel_operator_latency_seconds`
-  and `convintel_operator_errors_total` (`operator="intent"`). Attributes: `conversation.id`,
-  `operator.version`, `model.id`, `intent.customer_turns`, `intent.label`, `intent.confidence`.
+- `run()` does not open a span: it annotates the caller's current span (a no-op when there is
+  none). The pipeline wraps each operator call with `traced("operator.intent")`, which records
+  `convintel_operator_latency_seconds` and `convintel_operator_errors_total` once. Attributes:
+  `conversation.id`, `operator.version` (set by `traced`), `model.id`, `intent.customer_turns`,
+  `intent.label`, `intent.confidence`.
   Never text.
 - `operator.intent.warmup` span on `warmup()` (no metrics, so startup does not skew latency).
 
