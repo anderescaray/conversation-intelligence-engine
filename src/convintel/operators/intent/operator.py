@@ -14,7 +14,6 @@ from opentelemetry.trace import Status, StatusCode
 
 from convintel.contracts import Conversation, IntentOutput, OperatorResult, Speaker
 from convintel.errors import OperatorError
-from convintel.telemetry import traced
 
 from .bundle import IntentModelUnavailableError
 from .calibration import softmax
@@ -127,24 +126,26 @@ class IntentOperator:
             span.set_attribute("model.id", model.model_id)
 
     async def run(self, conversation: Conversation) -> OperatorResult[IntentOutput]:
+        # The caller opens the span with traced() and records latency and errors once; the
+        # operator only annotates the current span (a no-op when there is none).
         start = time.perf_counter()
         texts = [t.text for t in conversation.turns if t.speaker is Speaker.CUSTOMER]
         model_id: str | None = None
-        with traced(f"operator.{self.name}", version=self.version) as span:
-            span.set_attribute("conversation.id", conversation.id)
-            span.set_attribute("intent.customer_turns", len(texts))
-            if texts:
-                with _as_operator_error(self.name):
-                    model, probs = await asyncio.to_thread(self._predict, texts)
-                output = pick_intent(probs, model.labels, self._top_k)
-                model_id = model.model_id
-                span.set_attribute("model.id", model_id)
-            else:
-                output = IntentOutput(
-                    label=UNKNOWN_LABEL, confidence=0.0, source=CLASSIFIER_SOURCE, top_k=[]
-                )
-            span.set_attribute("intent.label", output.label)
-            span.set_attribute("intent.confidence", output.confidence)
+        span = trace.get_current_span()
+        span.set_attribute("conversation.id", conversation.id)
+        span.set_attribute("intent.customer_turns", len(texts))
+        if texts:
+            with _as_operator_error(self.name):
+                model, probs = await asyncio.to_thread(self._predict, texts)
+            output = pick_intent(probs, model.labels, self._top_k)
+            model_id = model.model_id
+            span.set_attribute("model.id", model_id)
+        else:
+            output = IntentOutput(
+                label=UNKNOWN_LABEL, confidence=0.0, source=CLASSIFIER_SOURCE, top_k=[]
+            )
+        span.set_attribute("intent.label", output.label)
+        span.set_attribute("intent.confidence", output.confidence)
 
         return OperatorResult[IntentOutput](
             operator=self.name,
