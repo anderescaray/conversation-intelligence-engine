@@ -34,7 +34,7 @@ from .storage import digest, file_hash, read_jsonl, write_json
 from .taxonomy import INTENTS
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONTROLS = ROOT / "tests/synth/judge_controls_v2.jsonl"
+DEFAULT_CONTROLS = ROOT / "tests/synth/judge_controls_v3.jsonl"
 
 
 class Control(Record):

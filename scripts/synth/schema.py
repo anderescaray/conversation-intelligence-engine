@@ -16,7 +16,7 @@ from .plausibility import (
 )
 from .taxonomy import DESCRIPTIONS, TaxonomyVersion
 
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 EntityType = Literal[
     "PERSON", "CREDIT_CARD", "IBAN_CODE", "PHONE_NUMBER", "EMAIL_ADDRESS", "ACCOUNT_NUMBER"
 ]

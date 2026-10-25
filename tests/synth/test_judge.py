@@ -44,7 +44,7 @@ def run_spec(client: LLMClient) -> RunSpec:
         model_revision="test",
         judge_model_id=client.model_id,
         judge_model_revision="test",
-        prompt_sha256=digest(load_prompt("synthetic", 4)),
+        prompt_sha256=digest(load_prompt("synthetic", 5)),
         judge_prompt_sha256=digest(load_prompt("synthetic_judge", JUDGE_PROMPT_VERSION)),
         environment_sha256="b" * 64,
         pii_scan="patterns",
@@ -86,7 +86,7 @@ async def test_blind_judge_never_sees_targets_or_pii_values(
     assert TAXONOMY in prompt and "<conversation>" in prompt
     assert record.input_sha256 == digest(judge_input(sample))
     assert record.passed and record.mismatched_labels == ()
-    assert record.prompt_version == "synthetic_judge/v3"
+    assert record.prompt_version == "synthetic_judge/v4"
 
 
 @pytest.mark.parametrize("label", LABELS)
@@ -199,14 +199,14 @@ async def test_closed_intent_schema_rejects_invented_labels(settings: Settings) 
     client = LLMClient(settings, chat_model=model, sleep=no_sleep)
     report = await run_gate(client, DEFAULT_CONTROLS)
     assert report.results[0].error == "LLMError" and not report.results[0].ok
-    assert not report.gate_passed and report.passed_controls == "21/22"
-    assert report.field_correct["intent"] == "21/22"
+    assert not report.gate_passed and report.passed_controls == "25/26"
+    assert report.field_correct["intent"] == "25/26"
 
 
 def test_controls_break_exactly_one_label_and_use_masked_pii() -> None:
     controls = load_controls(DEFAULT_CONTROLS)
-    assert len(controls) == 22
-    assert sum(c.broken is None for c in controls) == 9
+    assert len(controls) == 26
+    assert sum(c.broken is None for c in controls) == 11
     broken = [c.broken for c in controls if c.broken]
     assert set(broken) == set(LABELS)
     assert sum(c.targets.resolved is False for c in controls if c.broken == "resolved") == 3
@@ -234,8 +234,8 @@ async def test_gate_passes_a_truthful_judge_and_reports_counts(
         responses=[tool_answer(JudgeObservation, truthful(c).model_dump()) for c in controls]
     )
     report = await run_gate(LLMClient(settings, chat_model=model), DEFAULT_CONTROLS)
-    assert report.gate_passed and report.passed_controls == "22/22"
-    assert report.field_correct == {label: "22/22" for label in LABELS}
+    assert report.gate_passed and report.passed_controls == "26/26"
+    assert report.field_correct == {label: "26/26" for label in LABELS}
     assert report.judge_model_id == "ollama:qwen3:8b" and report.cost_usd == 0
     assert {s.name for s in spans.get_finished_spans()} >= {
         "synthetic.judge",
@@ -265,8 +265,8 @@ async def test_gate_fails_a_judge_that_reads_false_targets_as_mismatches(
     assert not report.gate_passed
     failed = {r.id for r in report.results if not r.ok}
     assert "ctl-01-valid-resolved" in failed and "ctl-08-broken-escalation-false" not in failed
-    assert report.field_correct["escalation_requested"] == "4/22"
-    assert report.field_correct["intent"] == "22/22"
+    assert report.field_correct["escalation_requested"] == "4/26"
+    assert report.field_correct["intent"] == "26/26"
 
 
 def test_only_current_judge_passed_samples_reach_human_review(
@@ -330,7 +330,7 @@ def test_historical_candidates_remain_readable_but_ineligible() -> None:
 
 
 def test_ollama_clients_disable_reasoning_without_network(settings: Settings) -> None:
-    generator = configured_client(settings, "synthetic", 4)
+    generator = configured_client(settings, "synthetic", 5)
     judge = configured_client(settings, "synthetic_judge", JUDGE_PROMPT_VERSION)
     assert generator.model_id == judge.model_id == "ollama:qwen3:8b"
     assert generator._chat_model is not None and judge._chat_model is not None
@@ -355,7 +355,7 @@ def test_label_targets_reject_non_boolean_flags() -> None:
 
 def test_gate_v2_keeps_the_original_controls_and_covers_the_failure_patterns() -> None:
     original = load_controls(DEFAULT_CONTROLS.parent / "judge_controls.jsonl")
-    controls = load_controls(DEFAULT_CONTROLS)
+    controls = load_controls(DEFAULT_CONTROLS.parent / "judge_controls_v2.jsonl")
     assert controls[:10] == original
     new = {c.id: c for c in controls[10:]}
     pairs = [
@@ -377,3 +377,21 @@ def test_gate_v2_keeps_the_original_controls_and_covers_the_failure_patterns() -
     assert (
         "supervisor" in escalation.turns[3].text and "joined the chat" in escalation.turns[3].text
     )
+
+
+def test_gate_v3_keeps_gate_v2_verbatim_and_adds_borderline_sentiment_controls() -> None:
+    v2 = (DEFAULT_CONTROLS.parent / "judge_controls_v2.jsonl").read_text().splitlines()
+    v3 = DEFAULT_CONTROLS.read_text().splitlines()
+    assert DEFAULT_CONTROLS.name == "judge_controls_v3.jsonl" and v3[:22] == v2
+    new = load_controls(DEFAULT_CONTROLS)[22:]
+    assert len(new) == 4
+    assert all(c.broken in (None, "start_sentiment", "end_sentiment") for c in new)
+    mild = [c for c in new if "negative" in (c.truth.start_sentiment, c.truth.end_sentiment)]
+    calm = [c for c in new if c not in mild]
+    assert len(mild) == len(calm) == 2
+    assert {c.broken for c in mild} == {None, "end_sentiment"}
+    assert {c.broken for c in calm} == {None, "start_sentiment"}
+    assert all(c.truth.start_sentiment == "neutral" for c in calm)
+    # Different wording from ctl-10 and the guide examples, so passing is not memorisation.
+    text = " ".join(turn.text.lower() for c in new for turn in c.turns)
+    assert not any(word in text for word in ("annoying", "frustrating", "worried"))

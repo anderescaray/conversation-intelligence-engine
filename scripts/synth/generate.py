@@ -69,7 +69,7 @@ from .validation import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-PROMPT_VERSION = 4
+PROMPT_VERSION = 5
 
 
 class Progress(BaseModel):

@@ -35,7 +35,13 @@ from scripts.synth.taxonomy import (
 from scripts.synth.validation import redact_unowned
 
 ROOT = Path(__file__).resolve().parents[2]
-GUIDE = ROOT / "evals/datasets/labeling-guide-v1.md"
+GUIDE_V1 = ROOT / "evals/datasets/labeling-guide-v1.md"
+GUIDE = ROOT / "evals/datasets/labeling-guide-v2.md"
+MILD_NEGATIVE_RULE = (
+    "- Any explicit expression of negative emotion counts as negative, however mild (for example "
+    "'that's annoying', 'a bit frustrating', 'I'm slightly worried'). Calm factual reporting "
+    "without such words is neutral."
+)
 
 
 class Utterance(BaseModel):
@@ -44,14 +50,31 @@ class Utterance(BaseModel):
 
 def test_generator_and_judge_embed_the_same_guide_verbatim() -> None:
     guide = GUIDE.read_text()
-    assert guide in load_prompt("synthetic", 4).system
-    assert guide in load_prompt("synthetic_judge", 3).system
+    assert guide in load_prompt("synthetic", 5).system
+    assert guide in load_prompt("synthetic_judge", 4).system
+    # Recorded runs keep the guide they were run with.
+    assert GUIDE_V1.read_text() in load_prompt("synthetic", 4).system
+    assert GUIDE_V1.read_text() in load_prompt("synthetic_judge", 3).system
     for rule in (
         "An escalation is resolved only if the person it is escalated to resolves it",
         "Courtesy is neutral",
         "Calmly reporting a bad event is neutral",
     ):
         assert rule in guide
+
+
+def test_guide_v2_only_adds_the_mild_negative_rule_and_its_examples() -> None:
+    v1 = GUIDE_V1.read_text().splitlines()
+    v2 = GUIDE.read_text().splitlines()
+    assert v1[0] == "# Labeling guide v1" and v2[0] == "# Labeling guide v2"
+    added = [line for line in v2[1:] if line not in v1]
+    assert [line for line in v2[1:] if line in v1] == v1[1:]
+    assert added == [
+        MILD_NEGATIVE_RULE,
+        '  - "The app charged me twice for the same coffee, which is a bit frustrating." '
+        "-> negative.",
+        '  - "The app charged me twice for the same coffee; could you check it?" -> neutral.',
+    ]
 
 
 def test_guide_descriptions_are_the_code_taxonomy() -> None:
@@ -70,7 +93,7 @@ def test_taxonomy_v2_changes_only_audited_descriptions_and_is_bound_to_judge_v3(
     assert len(changed) == 21
     assert {"get_physical_card", "apple_pay_or_google_pay", "visa_or_mastercard"} <= changed
     assert set(DESCRIPTIONS[1]) == set(DESCRIPTIONS[2]) == set(INTENTS)
-    assert JUDGE_TAXONOMY == {2: 1, 3: 2}
+    assert JUDGE_TAXONOMY == {2: 1, 3: 2, 4: 2}
     plan_v1, plan_v2 = scenarios(42, taxonomy=1), scenarios(42)
     for old, new in zip(plan_v1, plan_v2, strict=True):
         assert old.id == new.id and old.taxonomy_version == 1 and new.taxonomy_version == 2
@@ -247,7 +270,7 @@ async def test_rejudge_keeps_text_and_labels_and_reports_flips_by_field(
     assert sample.labels.scenario.model_dump(
         exclude={"intent_description", "taxonomy_version"}
     ) == (kept.labels.scenario.model_dump(exclude={"intent_description", "taxonomy_version"}))
-    assert sample.labels.judge is not None and sample.labels.judge.prompt_version.endswith("v3")
+    assert sample.labels.judge is not None and sample.labels.judge.prompt_version.endswith("v4")
     records = read_jsonl(output / "rejudge.jsonl", RejudgeRecord)
     assert [r.reason for r in records] == ["kept", "label_mismatch"]
     with pytest.raises(ConvIntelError, match="Output exists"):

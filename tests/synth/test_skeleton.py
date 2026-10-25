@@ -146,7 +146,7 @@ async def test_one_repair_with_concrete_errors_then_judge(
     sample = load_samples(directory)[0]
     assert isinstance(sample.labels, Annotation)
     assert sample.labels.provenance.repaired and sample.labels.provenance.input_tokens == 200
-    assert sample.labels.provenance.prompt_version == "synthetic/v4"
+    assert sample.labels.provenance.prompt_version == "synthetic/v5"
     assert "synthetic.repair" in {s.name for s in spans.get_finished_spans()}
 
 
@@ -235,7 +235,7 @@ async def test_judge_is_independent_of_generator_and_costs_are_split(
         judge_model_revision="haiku-snapshot",
     )
     run = RunSpec.model_validate_json((directory / "run.json").read_text())
-    assert run.model_id == "ollama:qwen3:8b" and run.generator_version == VERSION == "3.3.0"
+    assert run.model_id == "ollama:qwen3:8b" and run.generator_version == VERSION == "3.4.0"
     assert (run.judge_model_id, run.judge_model_revision) == (
         "anthropic:claude-haiku-4-5",
         "haiku-snapshot",

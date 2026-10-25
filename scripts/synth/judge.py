@@ -28,10 +28,10 @@ from .storage import digest
 from .taxonomy import DESCRIPTIONS, INTENTS, TaxonomyVersion
 from .validation import Rejected, masked_turns
 
-JUDGE_PROMPT_VERSION = 3
+JUDGE_PROMPT_VERSION = 4
 # Each judge prompt version is bound to the descriptions it was run with, so a stored verdict
 # stays verifiable after the taxonomy changes.
-JUDGE_TAXONOMY: dict[int, TaxonomyVersion] = {2: 1, 3: 2}
+JUDGE_TAXONOMY: dict[int, TaxonomyVersion] = {2: 1, 3: 2, 4: 2}
 
 
 def taxonomy_text(version: TaxonomyVersion) -> str:
