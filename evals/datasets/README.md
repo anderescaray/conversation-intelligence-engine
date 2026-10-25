@@ -16,7 +16,9 @@ T03 entrena con Banking77 real. Tampoco implementa el eval runner/CI gate de T11
 
 ## Generación label-first
 
-El generador **3.3.0 / esquema 3** usa el plan de escenarios v4 con la taxonomía v2, `prompts/synthetic/v4.yaml`
+El generador **3.4.0 / esquema 3** usa `prompts/synthetic/v5.yaml` y `prompts/synthetic_judge/v4.yaml`, que
+comparten la guía de etiquetado v2 (sección «Generador 3.4»); su puerta v3 **no ha pasado**.
+El generador **3.3.0 / esquema 3** usaba el plan de escenarios v4 con la taxonomía v2, `prompts/synthetic/v4.yaml`
 y `prompts/synthetic_judge/v3.yaml`, que comparten la guía de etiquetado v1 (sección «Generador 3.3»).
 El generador **3.2.0** usaba el **plan de escenarios v4** (abajo), `prompts/synthetic/v3.yaml`
 (salida estructurada por turno contra un esqueleto construido por código) y el juez ciego
@@ -502,6 +504,32 @@ porque Faker lo requiere y el resolver había seleccionado una versión publicad
 se prefiere una release verificada de 2025-03-23. No se usan fechas ni zonas horarias de Faker.
 No se añadieron dependencias al servicio base, SDKs de proveedor ni bibliotecas de audio:
 se reutilizan PyAV/numpy y `wave`.
+
+## Generador 3.4 (2026-10-25): guía de etiquetado v2 y puerta v3
+
+**Decisión sobre `ctl-10`.** «That's annoying» es una expresión explícita de frustración, aunque sea
+leve, así que el control es correcto y el juez v3 se equivocó. En lugar de sustituir el control, la
+regla se hace explícita. La guía v1 y los prompts que la incrustan no cambian.
+
+**Guía v2** (`evals/datasets/labeling-guide-v2.md`): es la v1 más la regla «Any explicit expression
+of negative emotion counts as negative, however mild (…). Calm factual reporting without such words
+is neutral.» y un ejemplo de cada caso. Se incrusta literalmente en `prompts/synthetic/v5.yaml` y
+`prompts/synthetic_judge/v4.yaml` (ligado a la taxonomía v2). Un test comprueba que v2 solo añade
+esas tres líneas.
+
+**Puerta v3** (`tests/synth/judge_controls_v3.jsonl`): son los 22 controles de v2, byte a byte,
+más 4 controles límite de sentimiento redactados con palabras distintas de `ctl-10` y de los
+ejemplos de la guía:
+- negativo leve: `ctl-23`, inicio válido, y `ctl-24`, final roto, en el que el objetivo dice neutral;
+- neutral tranquilo: `ctl-25`, inicio válido, y `ctl-26`, inicio roto, en el que el objetivo dice negativo.
+
+Resultado con Haiku y juez v4 (`data/synthetic/judge-checks/claude-haiku-4-5-gate-v3.json`):
+**25/26, no pasa** (0,164 USD, 64 s). Por campo: intent, resolved, escalación e inicio 26/26;
+final 25/26. `ctl-10` pasa ahora. El único fallo es `ctl-24`: el último turno del cliente expresa
+una preocupación leve («I'm a little concerned it will happen again»), y el juez lo lee como
+neutral. La regla nueva se aplica en el primer turno (`ctl-10`, `ctl-23`), pero no en un cierre
+negativo leve que sigue a una resolución. Siguiendo la regla acordada, no se ajustaron prompts
+ni controles, y no se ejecutaron la predicción, el re-juicio ni la regeneración.
 
 ## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
 
