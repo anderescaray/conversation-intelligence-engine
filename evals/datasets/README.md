@@ -548,6 +548,35 @@ una). Las dos ejecuciones dan los mismos valores en los 130 campos y solo difier
 evidencia citados en 13 campos, todos válidos. Dos ejecuciones no miden la variabilidad: solo
 descartan que el aprobado dependa de una ejecución favorable.
 
+**Predicción local** (`scripts/synth/predict_flips.py`, gratuita, registrada antes del re-juicio
+en `data/synthetic/predictions/rejudge-full-v3.2-haiku.json`). Usa léxicos simples sobre los 132
+candidatos y no escribe texto. Para intent da una cota superior: los candidatos cuya descripción
+cambió en la taxonomía v2.
+
+**Re-juicio con Sonnet** (`data/synthetic/candidates/full-v3.2-haiku-rejudge-j4-sonnet/`, juez v4,
+temperatura por defecto): **85 se mantienen y 47 cambian**, todos por discrepancia de etiqueta y
+ninguno por evidencia o error. Coste 2,12 USD (estimación previa 2,07), 318 s.
+
+| Campo | Previstos | Reales | Aciertos por índice | Dirección real |
+| --- | ---: | ---: | ---: | --- |
+| intent | 31 (cota) | 2 | 0 | `extra_charge_on_statement` → `card_payment_not_recognised` (2) |
+| resolved | 5 | 9 | 2 | false → true (9) |
+| escalación | 0 | 0 | 0 | — |
+| inicio | 36 | 30 | 30 | negative → neutral (30) |
+| final | 27 | 10 | 6 | positive → neutral 8, negative → neutral 1, neutral → positive 1 |
+
+- Cuatro candidatos cambian en dos campos.
+- Ningún campo supera 2 × previstos + 5.
+- Los dos cambios de intent son de descripciones que **no** cambiaron entre v1 y v2
+  (`synth-v4-42-079`, `synth-v4-42-092`): se deben al modelo del juez, no a la taxonomía.
+- Los 30 cambios de inicio son todos negativo → neutral y todos estaban previstos: el
+  generador 3.2 escribía aperturas tranquilas para inicios negativos, y con la guía v2 ese tono
+  es neutral.
+
+**Parada antes de regenerar:** 47 cambios superan el límite acordado de 45, así que no se
+regeneró ni se fusionó nada. Tras el re-juicio, 12 intents se quedan sin candidatos, que se suman
+a los 5 que ya faltaban.
+
 ## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
 
 **Guía de etiquetado.** `evals/datasets/labeling-guide-v1.md` es inmutable y se incrusta literalmente

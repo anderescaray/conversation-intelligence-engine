@@ -1,0 +1,10 @@
+{
+  "source": "data/synthetic/candidates/full-v3.2-haiku",
+  "source_run_sha256": "75b315e16b4f4f91e760217f47230cc63515cf633a55f699c70ad5426b867883",
+  "tool_version": "3.4.0",
+  "judge_model_id": "anthropic:claude-sonnet-5-5",
+  "judge_model_revision": "unresolved",
+  "judge_prompt_sha256": "0c9134355bd2240825be5bb360e96b29b10226fd620b08898a03a337af7d6ac3",
+  "judge_temperature": null,
+  "taxonomy_version": 2
+}
