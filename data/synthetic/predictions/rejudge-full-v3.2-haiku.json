@@ -1,0 +1,848 @@
+{
+  "source": "data/synthetic/candidates/full-v3.2-haiku",
+  "total": 132,
+  "candidates_with_any_flip": 74,
+  "predicted_by_field": {
+    "intent": 31,
+    "resolved": 5,
+    "escalation_requested": 0,
+    "start_sentiment": 36,
+    "end_sentiment": 27
+  },
+  "intent_description_changed": 31,
+  "predictions": [
+    {
+      "id": "synth-v4-42-000",
+      "index": 0,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-001",
+      "index": 1,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-002",
+      "index": 2,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-003",
+      "index": 3,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-004",
+      "index": 4,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-005",
+      "index": 5,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-006",
+      "index": 6,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-007",
+      "index": 7,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-008",
+      "index": 8,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-009",
+      "index": 9,
+      "fields": [
+        "intent",
+        "resolved",
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-010",
+      "index": 10,
+      "fields": [
+        "intent",
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-013",
+      "index": 13,
+      "fields": [
+        "intent",
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-014",
+      "index": 14,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-015",
+      "index": 15,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-016",
+      "index": 16,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-018",
+      "index": 18,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-019",
+      "index": 19,
+      "fields": [
+        "resolved"
+      ]
+    },
+    {
+      "id": "synth-v4-42-020",
+      "index": 20,
+      "fields": [
+        "intent",
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-022",
+      "index": 22,
+      "fields": [
+        "resolved"
+      ]
+    },
+    {
+      "id": "synth-v4-42-023",
+      "index": 23,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-024",
+      "index": 24,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-025",
+      "index": 25,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-026",
+      "index": 26,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-027",
+      "index": 27,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-028",
+      "index": 28,
+      "fields": [
+        "resolved",
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-029",
+      "index": 29,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-030",
+      "index": 30,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-031",
+      "index": 31,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-032",
+      "index": 32,
+      "fields": [
+        "intent",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-034",
+      "index": 34,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-036",
+      "index": 36,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-037",
+      "index": 37,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-038",
+      "index": 38,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-040",
+      "index": 40,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-041",
+      "index": 41,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-043",
+      "index": 43,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-044",
+      "index": 44,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-045",
+      "index": 45,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-046",
+      "index": 46,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-047",
+      "index": 47,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-048",
+      "index": 48,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-049",
+      "index": 49,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-050",
+      "index": 50,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-051",
+      "index": 51,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-052",
+      "index": 52,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-053",
+      "index": 53,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-054",
+      "index": 54,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-055",
+      "index": 55,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-056",
+      "index": 56,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-057",
+      "index": 57,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-058",
+      "index": 58,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-060",
+      "index": 60,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-061",
+      "index": 61,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-063",
+      "index": 63,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-065",
+      "index": 65,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-066",
+      "index": 66,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-067",
+      "index": 67,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-068",
+      "index": 68,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-069",
+      "index": 69,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-070",
+      "index": 70,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-071",
+      "index": 71,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-072",
+      "index": 72,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-073",
+      "index": 73,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-074",
+      "index": 74,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-075",
+      "index": 75,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-076",
+      "index": 76,
+      "fields": [
+        "intent",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-077",
+      "index": 77,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-078",
+      "index": 78,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-079",
+      "index": 79,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-080",
+      "index": 80,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-082",
+      "index": 82,
+      "fields": [
+        "intent",
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-083",
+      "index": 83,
+      "fields": [
+        "intent",
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-084",
+      "index": 84,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-085",
+      "index": 85,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-086",
+      "index": 86,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-087",
+      "index": 87,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-088",
+      "index": 88,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-089",
+      "index": 89,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-091",
+      "index": 91,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-092",
+      "index": 92,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-093",
+      "index": 93,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-094",
+      "index": 94,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-095",
+      "index": 95,
+      "fields": [
+        "intent",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-096",
+      "index": 96,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-097",
+      "index": 97,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-098",
+      "index": 98,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-100",
+      "index": 100,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-101",
+      "index": 101,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-102",
+      "index": 102,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-103",
+      "index": 103,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-104",
+      "index": 104,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-105",
+      "index": 105,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-106",
+      "index": 106,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-107",
+      "index": 107,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-108",
+      "index": 108,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-109",
+      "index": 109,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-110",
+      "index": 110,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-111",
+      "index": 111,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-112",
+      "index": 112,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-114",
+      "index": 114,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-115",
+      "index": 115,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-116",
+      "index": 116,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-117",
+      "index": 117,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-118",
+      "index": 118,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-119",
+      "index": 119,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-120",
+      "index": 120,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-121",
+      "index": 121,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-122",
+      "index": 122,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-123",
+      "index": 123,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-124",
+      "index": 124,
+      "fields": [
+        "intent",
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-125",
+      "index": 125,
+      "fields": [
+        "resolved"
+      ]
+    },
+    {
+      "id": "synth-v4-42-126",
+      "index": 126,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-127",
+      "index": 127,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-128",
+      "index": 128,
+      "fields": [
+        "intent",
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-129",
+      "index": 129,
+      "fields": [
+        "intent",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-130",
+      "index": 130,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-131",
+      "index": 131,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-132",
+      "index": 132,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-133",
+      "index": 133,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-134",
+      "index": 134,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-137",
+      "index": 137,
+      "fields": [
+        "start_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-138",
+      "index": 138,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-139",
+      "index": 139,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-140",
+      "index": 140,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-141",
+      "index": 141,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-142",
+      "index": 142,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-143",
+      "index": 143,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-145",
+      "index": 145,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-146",
+      "index": 146,
+      "fields": [
+        "end_sentiment"
+      ]
+    },
+    {
+      "id": "synth-v4-42-147",
+      "index": 147,
+      "fields": [
+        "intent"
+      ]
+    },
+    {
+      "id": "synth-v4-42-148",
+      "index": 148,
+      "fields": []
+    },
+    {
+      "id": "synth-v4-42-149",
+      "index": 149,
+      "fields": [
+        "start_sentiment",
+        "end_sentiment"
+      ]
+    }
+  ]
+}
