@@ -1,22 +1,11 @@
 """The pipeline state lets parallel branches report errors in the same step."""
 
-from datetime import UTC, datetime
 from typing import get_type_hints
 
 from langgraph.graph import END, START, StateGraph
+from pipeline_fakes import make_conversation
 
-from convintel.contracts.schemas import Channel, Conversation, Speaker, Turn
 from convintel.pipeline.state import PipelineState, PipelineUpdate
-
-
-def _conversation() -> Conversation:
-    return Conversation(
-        id="conv-1",
-        channel=Channel.CHAT,
-        started_at=datetime(2026, 10, 20, tzinfo=UTC),
-        turns=(Turn(index=0, speaker=Speaker.CUSTOMER, text="My card <CREDIT_CARD> was declined"),),
-        redacted=True,
-    )
 
 
 def test_parallel_branches_can_append_errors_in_the_same_step() -> None:
@@ -36,7 +25,7 @@ def test_parallel_branches_can_append_errors_in_the_same_step() -> None:
 
     final = graph.compile().invoke(
         {
-            "redacted_conversation": _conversation(),
+            "redacted_conversation": make_conversation(),
             "sentiment": None,
             "intent": None,
             "summary": None,
