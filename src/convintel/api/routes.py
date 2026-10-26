@@ -16,6 +16,15 @@ from convintel.contracts import Conversation, ConversationInsights, Transcriber
 router = APIRouter()
 
 
+def unredacted(conversation: Conversation) -> Conversation:
+    """Clear any `redacted` flag set outside the pipeline.
+
+    A client (or an adapter) claiming the text is already redacted must not be able to make the
+    pipeline skip PII redaction, so the API never trusts the flag.
+    """
+    return conversation.model_copy(update={"redacted": False})
+
+
 async def transcribe_spooled(
     conversation: Conversation, audio_uri: str, spool: AudioSpool, transcriber: Transcriber
 ) -> Conversation:
@@ -50,7 +59,7 @@ async def analyze_conversation(
             await asyncio.to_thread(spool.resolve, conversation.audio_uri)
         elif not conversation.turns:
             raise HTTPException(422, "A conversation needs turns or an audio_uri.")
-        return await pipeline.analyze(conversation)
+        return await pipeline.analyze(unredacted(conversation))
 
 
 @router.get("/healthz")

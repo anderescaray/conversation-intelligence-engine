@@ -37,8 +37,9 @@ class FakePipeline:
 
 
 class FakeTranscriber:
-    def __init__(self) -> None:
+    def __init__(self, redacted: bool = False) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.redacted = redacted
 
     async def transcribe(self, audio_uri: str, conversation_id: str) -> Conversation:
         self.calls.append((audio_uri, conversation_id))
@@ -47,6 +48,7 @@ class FakeTranscriber:
             channel=Channel.VOICE,
             started_at=datetime.now(UTC),
             turns=(Turn(index=0, speaker=Speaker.CUSTOMER, text="synthetic transcript"),),
+            redacted=self.redacted,
             audio_uri=audio_uri,
             metadata={"asr_model": "fake"},
         )

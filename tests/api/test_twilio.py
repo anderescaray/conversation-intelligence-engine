@@ -1,5 +1,6 @@
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx2
@@ -10,8 +11,11 @@ from fastapi.testclient import TestClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pydantic import SecretStr
 
+from convintel.api import twilio as twilio_module
 from convintel.api.twilio import EMPTY_TWIML, MAX_FORM_BYTES
 from convintel.config import Settings
+from convintel.contracts import Conversation
+from convintel.ingest.normalizers import normalize_twilio_sms
 
 BASE = "http://testserver"
 SMS = "/v1/twilio/sms"
@@ -84,6 +88,20 @@ def test_sms_is_verified_normalized_and_analyzed(
     assert conversation.turns[0].text == sms["Body"]
     (span,) = [s for s in spans.get_finished_spans() if s.name == "api.twilio.sms"]
     assert dict(span.attributes or {}) == {"conversation.id": sms["MessageSid"], "channel": "sms"}
+
+
+def test_sms_reaches_the_pipeline_unredacted(
+    twilio: TestClient,
+    pipeline: FakePipeline,
+    sms: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def claims_redacted(*args: Any, **kwargs: Any) -> Conversation:
+        return normalize_twilio_sms(*args, **kwargs).model_copy(update={"redacted": True})
+
+    monkeypatch.setattr(twilio_module, "normalize_twilio_sms", claims_redacted)
+    assert post(twilio, SMS, {**sms, "redacted": "true"}).status_code == 200
+    assert pipeline.seen[0].redacted is False
 
 
 @pytest.mark.parametrize("tamper", ["signature", "body", "token"])
@@ -182,6 +200,18 @@ def test_recording_is_fetched_into_the_spool_and_transcribed(
     (conversation,) = pipeline.seen
     assert conversation.metadata["recording_sid"] == recording["RecordingSid"]
     assert conversation.metadata["asr_model"] == "fake"
+
+
+def test_recording_reaches_the_pipeline_unredacted(
+    make_app: Callable[..., FastAPI],
+    pipeline: FakePipeline,
+    fetcher: FakeFetcher,
+    recording: dict[str, str],
+) -> None:
+    app = make_app(fetcher=fetcher, transcriber=FakeTranscriber(redacted=True))
+    with TestClient(app) as client:
+        assert post(client, RECORDING, recording).status_code == 204
+    assert pipeline.seen[0].redacted is False
 
 
 def test_recording_too_long_is_rejected_before_fetching(

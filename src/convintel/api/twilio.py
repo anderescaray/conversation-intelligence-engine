@@ -24,7 +24,7 @@ from convintel.api.dependencies import (
 from convintel.api.errors import ServiceNotConfiguredError
 from convintel.api.middleware import api_span
 from convintel.api.protocols import Pipeline, RecordingFetcher
-from convintel.api.routes import transcribe_spooled
+from convintel.api.routes import transcribe_spooled, unredacted
 from convintel.config import Settings
 from convintel.contracts import Transcriber
 from convintel.errors import ConvIntelError
@@ -112,7 +112,7 @@ async def twilio_sms(
             raise HTTPException(400, "Invalid Twilio SMS payload.") from None
         span.set_attribute("conversation.id", conversation.id)
         span.set_attribute("channel", conversation.channel.value)
-        await pipeline.analyze(conversation)
+        await pipeline.analyze(unredacted(conversation))
         return Response(EMPTY_TWIML, media_type="application/xml")
 
 
@@ -138,5 +138,5 @@ async def twilio_recording(
         spool.check_duration(float(recording.metadata["audio_duration_s"]))
         local = await fetcher.fetch(recording, spool.root)
         conversation = await transcribe_spooled(recording, str(local), spool, transcriber)
-        await pipeline.analyze(conversation)
+        await pipeline.analyze(unredacted(conversation))
         return Response(status_code=204)

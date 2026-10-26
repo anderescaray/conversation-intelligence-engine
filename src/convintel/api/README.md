@@ -40,6 +40,10 @@ app = create_app(
   the spool directory, at most 128 MiB and 3600 s by its container header. Twilio recordings are
   also rejected by `RecordingDuration` before any download. Confinement is checked before
   existence, so rejections do not reveal files outside the spool.
+- **Redaction cannot be skipped from outside**: every conversation reaches the pipeline with
+  `redacted=False`, whatever the client, Twilio payload or transcriber set. The pipeline (T10)
+  must still redact unconditionally and not branch on the flag; this API guard is only the
+  first line.
 - **No conversation text out of band**: error bodies are fixed strings (validation errors return
   only `loc` and `type`), logs carry exception type names only, spans `api.*` carry
   `conversation.id`, `channel` and `error.type`.

@@ -46,6 +46,16 @@ def test_returns_insights(client: TestClient, pipeline: FakePipeline) -> None:
     assert requests("200") == before + 1
 
 
+def test_client_redacted_flag_is_never_trusted(
+    client: TestClient, pipeline: FakePipeline, spool_dir: Path
+) -> None:
+    write_wav(spool_dir / "call.wav")
+    assert client.post(ROUTE, json=chat(redacted=True)).status_code == 200
+    audio = chat(channel="voice", turns=[], audio_uri="call.wav", redacted=True)
+    assert client.post(ROUTE, json=audio).status_code == 200
+    assert [c.redacted for c in pipeline.seen] == [False, False]
+
+
 def test_span_carries_ids_only(client: TestClient, spans: InMemorySpanExporter) -> None:
     client.post(ROUTE, json=chat())
     (span,) = [s for s in spans.get_finished_spans() if s.name == "api.conversations"]
