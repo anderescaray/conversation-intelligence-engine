@@ -22,6 +22,7 @@ from convintel.api.dependencies import (
     get_transcriber,
 )
 from convintel.api.errors import ServiceNotConfiguredError
+from convintel.api.limits import read_capped_body
 from convintel.api.middleware import api_span
 from convintel.api.protocols import Pipeline, RecordingFetcher
 from convintel.api.routes import transcribe_spooled, unredacted
@@ -54,14 +55,7 @@ def _require_twilio_config(settings: Settings) -> None:
 async def _read_form(request: Request) -> dict[str, str]:
     if request.headers.get("content-type", "").split(";")[0].strip().lower() != _FORM_TYPE:
         raise HTTPException(415, "Expected application/x-www-form-urlencoded.")
-    declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > MAX_FORM_BYTES:
-        raise HTTPException(413, "Request body too large.")
-    body = bytearray()
-    async for chunk in request.stream():
-        body += chunk
-        if len(body) > MAX_FORM_BYTES:
-            raise HTTPException(413, "Request body too large.")
+    body = await read_capped_body(request, MAX_FORM_BYTES)
     try:
         pairs = parse_qsl(
             body.decode("utf-8"), keep_blank_values=True, max_num_fields=MAX_FORM_FIELDS

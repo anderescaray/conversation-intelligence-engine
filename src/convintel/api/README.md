@@ -15,7 +15,7 @@ app = create_app(
 
 | Route | Purpose | Responses |
 |---|---|---|
-| `POST /v1/conversations` | `Conversation` in, `ConversationInsights` out. No turns + `audio_uri` → transcribed first. | 200, 413/422 audio rejected, 422 invalid body, 5xx |
+| `POST /v1/conversations` | `Conversation` in, `ConversationInsights` out. No turns + `audio_uri` → transcribed first. | 200, 413 body or audio too large, 422 audio rejected / invalid body, 5xx |
 | `POST /v1/twilio/sms` | Incoming SMS webhook → pipeline. | 200 empty TwiML, 400, 403, 413, 415, 503 |
 | `POST /v1/twilio/recording` | Recording status callback → fetcher → spool → transcriber → pipeline. | 204, 400, 403, 413, 422, 503 |
 | `GET /healthz` | Liveness. | 200 |
@@ -40,6 +40,8 @@ app = create_app(
   the spool directory, at most 128 MiB and 3600 s by its container header. Twilio recordings are
   also rejected by `RecordingDuration` before any download. Confinement is checked before
   existence, so rejections do not reveal files outside the spool.
+- **Body size**: `POST /v1/conversations` bodies over `MAX_CONVERSATION_BYTES` (1 MiB) get 413
+  `Request body too large.` before any JSON parsing (declared `Content-Length` or streamed bytes).
 - **Redaction cannot be skipped from outside**: every conversation reaches the pipeline with
   `redacted=False`, whatever the client, Twilio payload or transcriber set. The pipeline (T10)
   must still redact unconditionally and not branch on the flag; this API guard is only the

@@ -9,6 +9,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
 from convintel.api.audio import AudioSpool
 from convintel.api.dependencies import State, get_pipeline, get_spool, get_transcriber
+from convintel.api.limits import CappedBodyRoute
 from convintel.api.middleware import api_span
 from convintel.api.protocols import Pipeline
 from convintel.contracts import Conversation, ConversationInsights, Transcriber
@@ -40,7 +41,6 @@ async def transcribe_spooled(
     )
 
 
-@router.post("/v1/conversations", response_model=ConversationInsights)
 async def analyze_conversation(
     conversation: Conversation,
     pipeline: Annotated[Pipeline, Depends(get_pipeline)],
@@ -60,6 +60,15 @@ async def analyze_conversation(
         elif not conversation.turns:
             raise HTTPException(422, "A conversation needs turns or an audio_uri.")
         return await pipeline.analyze(unredacted(conversation))
+
+
+router.add_api_route(
+    "/v1/conversations",
+    analyze_conversation,
+    methods=["POST"],
+    response_model=ConversationInsights,
+    route_class_override=CappedBodyRoute,
+)
 
 
 @router.get("/healthz")

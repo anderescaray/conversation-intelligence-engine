@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from prometheus_client import REGISTRY, generate_latest
 
+from convintel.api.limits import BODY_TOO_LARGE, MAX_CONVERSATION_BYTES
 from convintel.errors import (
     ConvIntelError,
     LLMError,
@@ -54,6 +56,43 @@ def test_client_redacted_flag_is_never_trusted(
     audio = chat(channel="voice", turns=[], audio_uri="call.wav", redacted=True)
     assert client.post(ROUTE, json=audio).status_code == 200
     assert [c.redacted for c in pipeline.seen] == [False, False]
+
+
+def body_of_size(size: int) -> bytes:
+    """A valid conversation JSON body of exactly `size` bytes (padding in the turn text)."""
+    empty = json.dumps(chat(turns=[{"index": 0, "speaker": "customer", "text": ""}]))
+    padding = "x" * (size - len(empty.encode()))
+    return json.dumps(chat(turns=[{"index": 0, "speaker": "customer", "text": padding}])).encode()
+
+
+@pytest.mark.parametrize("chunked", [False, True], ids=["content-length", "chunked"])
+def test_body_size_limit_boundary(
+    client: TestClient, pipeline: FakePipeline, chunked: bool
+) -> None:
+    def send(body: bytes) -> Any:
+        # A generator makes the client stream without Content-Length (chunked encoding).
+        content = iter([body[: len(body) // 2], body[len(body) // 2 :]]) if chunked else body
+        return client.post(ROUTE, content=content, headers={"content-type": "application/json"})
+
+    at_limit = body_of_size(MAX_CONVERSATION_BYTES)
+    assert len(at_limit) == MAX_CONVERSATION_BYTES
+    assert send(at_limit).status_code == 200
+
+    over = body_of_size(MAX_CONVERSATION_BYTES + 1)
+    response = send(over)
+    assert response.status_code == 413
+    assert response.json() == {"detail": BODY_TOO_LARGE}
+    assert len(pipeline.seen) == 1
+
+
+def test_oversized_body_is_rejected_before_parsing(client: TestClient) -> None:
+    # Not JSON at all: a parser would answer 422, the cap answers 413 first.
+    response = client.post(
+        ROUTE,
+        content=b"{" * (MAX_CONVERSATION_BYTES + 1),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 413
 
 
 def test_span_carries_ids_only(client: TestClient, spans: InMemorySpanExporter) -> None:
