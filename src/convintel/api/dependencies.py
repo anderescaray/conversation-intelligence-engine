@@ -10,7 +10,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
-from convintel.api.audio import AudioSpool
+from convintel.api.audio import AUDIO_SPOOL_TTL_S, AudioSpool
 from convintel.api.errors import ServiceNotConfiguredError
 from convintel.api.protocols import Pipeline, RecordingFetcher
 from convintel.config import Settings, get_settings
@@ -26,6 +26,7 @@ class ApiState:
     fetcher: RecordingFetcher | None = None
     settings: Settings | None = None
     public_base_url: str | None = None
+    spool_ttl_s: float = AUDIO_SPOOL_TTL_S
     ready: bool = field(default=False, init=False)
 
 

@@ -5,7 +5,10 @@ must be a regular file inside the spool directory, small enough on disk and shor
 container header. Every check happens before a single frame is decoded.
 """
 
+import logging
+import os
 import stat
+import time
 from pathlib import Path
 from typing import Literal
 from urllib.parse import unquote, urlsplit
@@ -19,9 +22,13 @@ from convintel.errors import ConvIntelError
 MAX_AUDIO_BYTES = 128 * 1024 * 1024
 MAX_AUDIO_DURATION_S = 3600.0
 SPOOL_DIR = Path("var/spool/audio")
+# Raw audio is unredacted PII; anything a request did not clean up lives at most this long.
+AUDIO_SPOOL_TTL_S = 24 * 3600.0
 
 # Same demuxers and protocol the transcriber allows, so probing cannot reach further than decoding.
 _PROBE_OPTIONS = {"format_whitelist": "wav,mp3,flac,ogg", "protocol_whitelist": "file"}
+
+_logger = logging.getLogger(__name__)
 
 AudioRejection = Literal["outside_spool", "not_found", "too_large", "too_long", "unreadable"]
 
@@ -89,6 +96,53 @@ class AudioSpool:
             raise AudioRejectedError("unreadable")
         self.check_duration(duration)
         return path
+
+    def discard(self, path: Path) -> bool:
+        """Delete a file the API itself placed in the spool; `True` if one was removed.
+
+        Only a regular file whose real directory is inside the spool is removed. The last path
+        component is never followed, so a symlink (to anything) is left alone and its target
+        is never touched.
+        """
+        candidate = path if path.is_absolute() else self.root / path
+        target = candidate.parent.resolve() / candidate.name
+        if not target.parent.is_relative_to(self.root):
+            return False
+        try:
+            if not stat.S_ISREG(target.lstat().st_mode):
+                return False
+            target.unlink()
+        except FileNotFoundError:
+            return False
+        return True
+
+
+def sweep_spool(
+    spool: AudioSpool, ttl_s: float = AUDIO_SPOOL_TTL_S, *, now: float | None = None
+) -> int:
+    """Delete regular files in the spool last modified more than `ttl_s` ago; return the count.
+
+    The safety net for recordings a crash or a failed fetch left behind. Symlinks are neither
+    followed (files or directories) nor deleted, so nothing outside the spool can be reached.
+    """
+    cutoff = (time.time() if now is None else now) - ttl_s
+    removed = failed = 0
+    for directory, _dirs, files in os.walk(spool.root, followlinks=False):
+        for name in files:
+            path = Path(directory, name)
+            try:
+                info = path.lstat()
+                if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff:
+                    path.unlink()
+                    removed += 1
+            except FileNotFoundError:
+                continue
+            except OSError:
+                failed += 1
+    if failed:
+        # Counts only: spool file names are not guaranteed to be free of identifiers.
+        _logger.warning("Spool sweep could not delete %d expired files", failed)
+    return removed
 
 
 def _probe_duration_s(path: Path) -> float | None:

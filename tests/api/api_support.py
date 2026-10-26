@@ -37,12 +37,15 @@ class FakePipeline:
 
 
 class FakeTranscriber:
-    def __init__(self, redacted: bool = False) -> None:
+    def __init__(self, redacted: bool = False, error: Exception | None = None) -> None:
         self.calls: list[tuple[str, str]] = []
         self.redacted = redacted
+        self.error = error
 
     async def transcribe(self, audio_uri: str, conversation_id: str) -> Conversation:
         self.calls.append((audio_uri, conversation_id))
+        if self.error is not None:
+            raise self.error
         return Conversation(
             id=conversation_id,
             channel=Channel.VOICE,

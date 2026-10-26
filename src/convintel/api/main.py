@@ -4,6 +4,7 @@ Startup fails loudly instead of serving a half-ready process: telemetry is confi
 warmup is traced, then the pipeline warms up, and only then does `/readyz` report ready.
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -12,7 +13,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from convintel.api import errors
-from convintel.api.audio import SPOOL_DIR, AudioSpool
+from convintel.api.audio import AUDIO_SPOOL_TTL_S, SPOOL_DIR, AudioSpool, sweep_spool
 from convintel.api.dependencies import ApiState
 from convintel.api.errors import ServiceNotConfiguredError
 from convintel.api.middleware import RequestMetricsMiddleware, api_span
@@ -34,6 +35,9 @@ _logger = logging.getLogger(__name__)
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     state: ApiState = app.state.convintel
     state.telemetry_setup()
+    with api_span("api.spool.sweep") as span:
+        removed = await asyncio.to_thread(sweep_spool, state.spool, state.spool_ttl_s)
+        span.set_attribute("files.removed", removed)
     if state.pipeline is None:
         raise ServiceNotConfiguredError("No pipeline configured; pass one to create_app().")
     with api_span("api.warmup"):
@@ -58,6 +62,7 @@ def create_app(
     spool_dir: Path = SPOOL_DIR,
     settings: Settings | None = None,
     public_base_url: str | None = None,
+    spool_ttl_s: float = AUDIO_SPOOL_TTL_S,
     telemetry_setup: Callable[[], object] = setup,
 ) -> FastAPI:
     """Build the app. Every argument is a seam until `Settings` grows the API fields.
@@ -74,6 +79,7 @@ def create_app(
         fetcher=fetcher,
         settings=settings,
         public_base_url=public_base_url,
+        spool_ttl_s=spool_ttl_s,
     )
     errors.install(app)
     app.add_middleware(RequestMetricsMiddleware, excluded_routes=PROBE_ROUTES)

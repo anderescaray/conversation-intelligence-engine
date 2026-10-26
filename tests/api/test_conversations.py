@@ -130,6 +130,18 @@ def test_transcribes_spooled_audio(
     assert analyzed.metadata == {"source": "batch", "asr_model": "fake"}
 
 
+@pytest.mark.parametrize("fails", [False, True], ids=["ok", "transcription_fails"])
+def test_client_placed_audio_is_never_deleted(
+    make_app: Callable[..., FastAPI], spool_dir: Path, fails: bool
+) -> None:
+    audio = write_wav(spool_dir / "client.wav")
+    transcriber = FakeTranscriber(error=TranscriptionError("synthetic") if fails else None)
+    with TestClient(make_app(transcriber=transcriber)) as client:
+        response = client.post(ROUTE, json=chat(turns=[], audio_uri="client.wav"))
+    assert response.status_code == (500 if fails else 200)
+    assert audio.exists()
+
+
 @pytest.mark.parametrize("turns", [[], None])
 def test_audio_outside_the_spool_never_reaches_the_pipeline(
     client: TestClient,

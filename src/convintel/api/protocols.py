@@ -26,6 +26,8 @@ class RecordingFetcher(Protocol):
         """Store `recording.audio_uri` as a file under `spool_dir` and return its path.
 
         The API re-checks the returned path (confinement, size, duration) before transcribing,
-        so implementations cannot widen what reaches the decoder.
+        so implementations cannot widen what reaches the decoder, and deletes it once
+        transcription ends, whether it succeeded or not. Write a fresh file per call; never
+        return a cached or shared one.
         """
         ...

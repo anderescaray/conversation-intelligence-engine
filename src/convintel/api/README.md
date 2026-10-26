@@ -27,7 +27,8 @@ app = create_app(
 - `Pipeline`: `async analyze(conversation) -> ConversationInsights`, `async warmup()`.
   Warmup runs in the lifespan, after `telemetry.setup()`; if it raises, startup fails.
 - `RecordingFetcher`: `async fetch(recording, spool_dir) -> Path`. No implementation ships yet,
-  so the recording webhook answers 503 until one is passed to `create_app`.
+  so the recording webhook answers 503 until one is passed to `create_app`. The returned file
+  is deleted after transcription (see spool lifecycle), so return a fresh file per call.
 - Transcriber: the `Transcriber` contract; defaults to `WhisperTranscriber()`.
 
 ## Safety rules enforced here
@@ -40,6 +41,13 @@ app = create_app(
   the spool directory, at most 128 MiB and 3600 s by its container header. Twilio recordings are
   also rejected by `RecordingDuration` before any download. Confinement is checked before
   existence, so rejections do not reveal files outside the spool.
+- **Spool lifecycle**: recordings the API fetched (Twilio) are deleted when transcription ends,
+  on success or failure (`recordings.fetched_recording`); Twilio keeps the original and retries,
+  so a retry refetches. Files clients placed for `POST /v1/conversations` are never deleted by
+  request handling. At startup the lifespan runs `sweep_spool`, which removes regular files
+  older than `AUDIO_SPOOL_TTL_S` (24 h) anywhere in the spool, client files included: it is the
+  retention bound for raw audio. Deletion never follows symlinks, never deletes them and never
+  leaves the spool.
 - **Body size**: `POST /v1/conversations` bodies over `MAX_CONVERSATION_BYTES` (1 MiB) get 413
   `Request body too large.` before any JSON parsing (declared `Content-Length` or streamed bytes).
 - **Redaction cannot be skipped from outside**: every conversation reaches the pipeline with

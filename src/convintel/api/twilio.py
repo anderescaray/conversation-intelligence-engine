@@ -25,6 +25,7 @@ from convintel.api.errors import ServiceNotConfiguredError
 from convintel.api.limits import read_capped_body
 from convintel.api.middleware import api_span
 from convintel.api.protocols import Pipeline, RecordingFetcher
+from convintel.api.recordings import fetched_recording
 from convintel.api.routes import transcribe_spooled, unredacted
 from convintel.config import Settings
 from convintel.contracts import Transcriber
@@ -130,7 +131,7 @@ async def twilio_recording(
         span.set_attribute("channel", recording.channel.value)
         # Reject from the declared duration before downloading anything.
         spool.check_duration(float(recording.metadata["audio_duration_s"]))
-        local = await fetcher.fetch(recording, spool.root)
-        conversation = await transcribe_spooled(recording, str(local), spool, transcriber)
+        async with fetched_recording(fetcher, recording, spool) as local:
+            conversation = await transcribe_spooled(recording, local, spool, transcriber)
         await pipeline.analyze(unredacted(conversation))
         return Response(status_code=204)

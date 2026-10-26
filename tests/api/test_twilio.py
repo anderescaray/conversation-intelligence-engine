@@ -15,6 +15,7 @@ from convintel.api import twilio as twilio_module
 from convintel.api.twilio import EMPTY_TWIML, MAX_FORM_BYTES
 from convintel.config import Settings
 from convintel.contracts import Conversation
+from convintel.errors import OperatorError, TranscriptionError
 from convintel.ingest.normalizers import normalize_twilio_sms
 
 BASE = "http://testserver"
@@ -214,6 +215,34 @@ def test_recording_reaches_the_pipeline_unredacted(
     assert pipeline.seen[0].redacted is False
 
 
+@pytest.mark.parametrize(
+    ("outcome", "status"),
+    [("ok", 204), ("transcription_fails", 500), ("audio_too_large", 413), ("pipeline_fails", 500)],
+)
+def test_fetched_recording_is_always_deleted(
+    make_app: Callable[..., FastAPI],
+    pipeline: FakePipeline,
+    recording: dict[str, str],
+    spool_dir: Path,
+    outcome: str,
+    status: int,
+) -> None:
+    fetched = spool_dir / "RE-synthetic.wav"
+    fetcher = FakeFetcher(lambda spool: write_wav(fetched, seconds=1))
+    transcriber = FakeTranscriber()
+    if outcome == "transcription_fails":
+        transcriber.error = TranscriptionError("synthetic")
+    if outcome == "pipeline_fails":
+        pipeline.error = OperatorError("sentiment", "synthetic")
+    app = make_app(fetcher=fetcher, transcriber=transcriber)
+    if outcome == "audio_too_large":
+        app.state.convintel.spool.max_bytes = 100
+    with TestClient(app) as client:
+        assert post(client, RECORDING, recording).status_code == status
+    assert fetcher.calls == 1
+    assert not fetched.exists()
+
+
 def test_recording_too_long_is_rejected_before_fetching(
     twilio: TestClient, fetcher: FakeFetcher, recording: dict[str, str]
 ) -> None:
@@ -233,6 +262,8 @@ def test_fetched_file_outside_the_spool_is_rejected(
         response = post(client, RECORDING, recording)
     assert response.status_code == 422
     assert not transcriber.calls
+    # Cleanup never reaches outside the spool, even for a path the fetcher returned.
+    assert (tmp_path / "escape.wav").exists()
 
 
 def test_recording_without_a_fetcher_is_503(
