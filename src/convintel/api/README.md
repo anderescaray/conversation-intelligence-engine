@@ -87,4 +87,7 @@ app = create_app(
 
 `convintel_requests_total{route, status}` counts every request except probes (`/healthz`,
 `/readyz`, `/metrics`), so the 5xx ratio matches the error-rate SLO. `route` is the route
-template; unknown paths share `route="unmatched"`.
+template; unknown paths share `route="unmatched"`. An exception raised after the response
+headers were sent (e.g. inside a streaming body) is counted as `status="500"`, whatever status
+was already sent, and re-raised so the server aborts the response; only the exception type is
+logged by the API.

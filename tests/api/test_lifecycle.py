@@ -1,8 +1,9 @@
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 
 import pytest
 from api_support import FakePipeline
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from prometheus_client import REGISTRY
 
@@ -83,3 +84,25 @@ def test_unknown_paths_share_one_label(client: TestClient) -> None:
     client.get("/anything/else")
     assert requests("unmatched", "404") == before + 2
     assert requests("/v1/conversations/some-id-123", "404") == 0
+
+
+def test_failure_after_response_start_counts_as_500_and_propagates(
+    make_app: Callable[..., FastAPI],
+) -> None:
+    class StreamBroke(RuntimeError):
+        pass
+
+    async def chunks() -> AsyncIterator[bytes]:
+        yield b"partial"
+        raise StreamBroke
+
+    async def broken_stream() -> StreamingResponse:
+        return StreamingResponse(chunks())
+
+    app = make_app()
+    app.add_api_route("/test/broken-stream", broken_stream)
+    before = requests("/test/broken-stream", "500")
+    with TestClient(app) as client, pytest.raises(StreamBroke):
+        client.get("/test/broken-stream")
+    assert requests("/test/broken-stream", "500") == before + 1
+    assert requests("/test/broken-stream", "200") == 0

@@ -63,11 +63,12 @@ class RequestMetricsMiddleware:
             await self.app(scope, receive, send_and_record)
         except Exception as exc:
             _logger.error("Unhandled %s on %s", type(exc).__name__, _route(scope))
-            if not started:
-                status = 500
-                await JSONResponse({"detail": INTERNAL_ERROR}, status_code=500)(
-                    scope, receive, send
-                )
+            status = 500
+            if started:
+                # Headers are on the wire, so no 500 body can follow and the server must abort
+                # the response; it still counts as a 500 whatever status was already sent.
+                raise
+            await JSONResponse({"detail": INTERNAL_ERROR}, status_code=500)(scope, receive, send)
         finally:
             route = _route(scope)
             if route not in self.excluded_routes:
