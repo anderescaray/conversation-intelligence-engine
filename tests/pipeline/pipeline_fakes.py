@@ -5,12 +5,14 @@ from datetime import UTC, datetime
 from pydantic import BaseModel
 
 from convintel.contracts import Channel, Conversation, Speaker, Turn
-from convintel.contracts.schemas import IntentOutput, OperatorResult
+from convintel.contracts.schemas import IntentOutput, OperatorResult, PIIEntity, PIIOutput
 from convintel.errors import ConvIntelError
 from convintel.operators.intent.operator import CLASSIFIER_SOURCE
 
 DEFAULT_TEXT = "Where is my new card?"
 FAKE_VERSION = "0.0.0-test"
+REDACTED_TEXT = "<EMAIL_ADDRESS>"
+TAU = 0.861
 
 
 def make_conversation(
@@ -36,28 +38,95 @@ def intent_output(label: str = "card_arrival", confidence: float = 0.95) -> Inte
     return IntentOutput(label=label, confidence=confidence, source=CLASSIFIER_SOURCE, top_k=[])
 
 
-def as_result[T: BaseModel](name: str, output: T) -> OperatorResult[T]:
+def as_result[T: BaseModel](
+    name: str, output: T, *, cost_usd: float | None = None, input_tokens: int | None = None
+) -> OperatorResult[T]:
     return OperatorResult[T](
-        operator=name, operator_version=FAKE_VERSION, output=output, latency_ms=1.0, model_id="fake"
+        operator=name,
+        operator_version=FAKE_VERSION,
+        output=output,
+        latency_ms=1.0,
+        model_id="fake",
+        cost_usd=cost_usd,
+        input_tokens=input_tokens,
     )
 
 
 class FakeOperator[T: BaseModel]:
-    """Satisfies the Operator protocol by shape: returns a fixed output, or raises."""
+    """Satisfies the Operator protocol by shape: records what it saw, returns a fixed output."""
 
     version = FAKE_VERSION
 
-    def __init__(self, name: str, output: T, *, error: ConvIntelError | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        output: T,
+        *,
+        error: ConvIntelError | None = None,
+        cost_usd: float | None = None,
+        input_tokens: int | None = None,
+    ) -> None:
         self.name = name
         self._output = output
         self._error = error
-        self.calls = 0
+        self._cost_usd = cost_usd
+        self._input_tokens = input_tokens
+        self.seen: list[Conversation] = []
+
+    @property
+    def calls(self) -> int:
+        return len(self.seen)
 
     async def run(self, conversation: Conversation) -> OperatorResult[T]:
+        self.seen.append(conversation)
+        if self._error is not None:
+            raise self._error
+        return as_result(
+            self.name, self._output, cost_usd=self._cost_usd, input_tokens=self._input_tokens
+        )
+
+
+class FakeIntentClassifier(FakeOperator[IntentOutput]):
+    """Intent operator double with the τ shipped by its model bundle, known after warmup."""
+
+    def __init__(self, output: IntentOutput, *, threshold: float | None = TAU) -> None:
+        super().__init__("intent", output)
+        self._threshold = threshold
+        self.warmed = False
+
+    @property
+    def threshold(self) -> float | None:
+        return self._threshold if self.warmed else None
+
+    async def warmup(self) -> None:
+        self.warmed = True
+
+
+class FakeRedactor:
+    """Replaces every turn's text; can fail, or 'forget' to set the redacted flag."""
+
+    name = "pii"
+    version = FAKE_VERSION
+
+    def __init__(self, *, error: Exception | None = None, sets_flag: bool = True) -> None:
+        self._error = error
+        self._sets_flag = sets_flag
+        self.calls = 0
+
+    async def run(self, conversation: Conversation) -> OperatorResult[PIIOutput]:
         self.calls += 1
         if self._error is not None:
             raise self._error
-        return as_result(self.name, self._output)
+        redacted = conversation.model_copy(
+            update={
+                "turns": tuple(
+                    t.model_copy(update={"text": REDACTED_TEXT}) for t in conversation.turns
+                ),
+                "redacted": self._sets_flag,
+            }
+        )
+        entity = PIIEntity(entity_type="EMAIL_ADDRESS", turn_index=0, start=0, end=1, score=1.0)
+        return as_result(self.name, PIIOutput(entities=[entity], redacted_conversation=redacted))
 
 
 class FakeVerifier:
