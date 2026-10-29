@@ -3,6 +3,11 @@
 Signature verification runs once on its own so that a failure maps to 403 without parsing
 exception messages; the normalizers then re-verify (they have no bypass) and any error left is
 a malformed payload (400). Neither response, span nor log carries a form value.
+
+The signature is the first thing checked: services that may be missing (pipeline, fetcher) are
+resolved from the state only after it passes, so an unsigned caller cannot learn which parts of
+the deployment are configured. The Twilio credentials are the one check that comes first,
+because verification needs them.
 """
 
 import re
@@ -11,24 +16,13 @@ from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from convintel.api.audio import AudioSpool
-from convintel.api.dependencies import (
-    ApiState,
-    State,
-    get_app_settings,
-    get_fetcher,
-    get_pipeline,
-    get_spool,
-    get_transcriber,
-)
+from convintel.api.dependencies import ApiState, State, get_app_settings, get_fetcher, get_pipeline
 from convintel.api.errors import ServiceNotConfiguredError
 from convintel.api.limits import read_capped_body
 from convintel.api.middleware import api_span
-from convintel.api.protocols import Pipeline, RecordingFetcher
 from convintel.api.recordings import fetched_recording
 from convintel.api.routes import transcribe_spooled, unredacted
 from convintel.config import Settings
-from convintel.contracts import Transcriber
 from convintel.errors import ConvIntelError
 from convintel.ingest.normalizers import normalize_twilio_recording, normalize_twilio_sms
 from convintel.ingest.twilio import TwilioWebhook, validate_twilio_webhook
@@ -97,10 +91,10 @@ async def twilio_sms(
     request: Request,
     state: State,
     settings: AppSettings,
-    pipeline: Annotated[Pipeline, Depends(get_pipeline)],
 ) -> Response:
     with api_span("api.twilio.sms") as span:
         webhook = await _verified_webhook(request, state, settings)
+        pipeline = get_pipeline(state)
         try:
             conversation = normalize_twilio_sms(webhook, settings=settings)
         except ConvIntelError:
@@ -116,13 +110,10 @@ async def twilio_recording(
     request: Request,
     state: State,
     settings: AppSettings,
-    pipeline: Annotated[Pipeline, Depends(get_pipeline)],
-    spool: Annotated[AudioSpool, Depends(get_spool)],
-    transcriber: Annotated[Transcriber, Depends(get_transcriber)],
-    fetcher: Annotated[RecordingFetcher, Depends(get_fetcher)],
 ) -> Response:
     with api_span("api.twilio.recording") as span:
         webhook = await _verified_webhook(request, state, settings)
+        pipeline, fetcher, spool = get_pipeline(state), get_fetcher(state), state.spool
         try:
             recording = normalize_twilio_recording(webhook, settings=settings)
         except ConvIntelError:
@@ -132,6 +123,8 @@ async def twilio_recording(
         # Reject from the declared duration before downloading anything.
         spool.check_duration(float(recording.metadata["audio_duration_s"]))
         async with fetched_recording(fetcher, recording, spool) as local:
-            conversation = await transcribe_spooled(recording, local, spool, transcriber)
+            conversation = await transcribe_spooled(recording, local, spool, state.transcriber)
+        # The local copy is gone now; a path to it must not travel downstream.
+        conversation = conversation.model_copy(update={"audio_uri": None})
         await pipeline.analyze(unredacted(conversation))
         return Response(status_code=204)

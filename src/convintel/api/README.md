@@ -27,8 +27,9 @@ app = create_app(
 - `Pipeline`: `async analyze(conversation) -> ConversationInsights`, `async warmup()`.
   Warmup runs in the lifespan, after `telemetry.setup()`; if it raises, startup fails.
 - `RecordingFetcher`: `async fetch(recording, spool_dir) -> Path`. No implementation ships yet,
-  so the recording webhook answers 503 until one is passed to `create_app`. The returned file
-  is deleted after transcription (see spool lifecycle), so return a fresh file per call.
+  so the recording webhook answers 503 to correctly signed requests until one is passed to
+  `create_app`. The returned file is deleted after transcription (see spool lifecycle), so
+  return a fresh file per call.
 - Transcriber: the `Transcriber` contract; defaults to `WhisperTranscriber()`.
 
 ## Safety rules enforced here
@@ -37,6 +38,10 @@ app = create_app(
   otherwise 503 (fail closed). Signatures are verified by the T01 helper against
   `public_base_url + path` (or the request URL when unset), never forwarded headers. Bodies over
   64 KiB, non-form content types and repeated fields are rejected before verification.
+  The signature is checked before anything else that can fail with 503: the pipeline and the
+  recording fetcher are looked up only after it passes, so an unsigned request gets 403 and
+  learns nothing about what is configured. The Twilio credentials are the one exception (no
+  signature can be verified without them).
 - **Audio** (`AudioSpool`): `audio_uri` must resolve (symlinks followed) to a regular file inside
   the spool directory, at most 128 MiB and 3600 s by its container header. Twilio recordings are
   also rejected by `RecordingDuration` before any download. Confinement is checked before
@@ -48,6 +53,15 @@ app = create_app(
   older than `AUDIO_SPOOL_TTL_S` (24 h) anywhere in the spool, client files included: it is the
   retention bound for raw audio. Deletion never follows symlinks, never deletes them and never
   leaves the spool.
+- **Spool trust model**: the spool directory must be writable only by the API process (and by
+  whatever the operator uses to place client audio, under the same trust). Confinement is
+  checked on the resolved path and the file is opened afterwards; a writer able to swap a file
+  for a symlink between those two steps could redirect the read. That race is not defended in
+  code: the deployment (T13) must keep the spool private to the API.
+- **Pipeline input after a Twilio recording**: the fetched file is deleted as soon as
+  transcription ends, so the conversation handed to the pipeline has `audio_uri=None`; the
+  pipeline must work from `turns` alone. For `POST /v1/conversations` the client's `audio_uri`
+  is kept (the API does not delete client files).
 - **Body size**: `POST /v1/conversations` bodies over `MAX_CONVERSATION_BYTES` (1 MiB) get 413
   `Request body too large.` before any JSON parsing (declared `Content-Length` or streamed bytes).
 - **Redaction cannot be skipped from outside**: every conversation reaches the pipeline with

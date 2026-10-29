@@ -1,6 +1,6 @@
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
 import httpx2
@@ -266,9 +266,26 @@ def test_fetched_file_outside_the_spool_is_rejected(
     assert (tmp_path / "escape.wav").exists()
 
 
-def test_recording_without_a_fetcher_is_503(
-    client: TestClient, pipeline: FakePipeline, recording: dict[str, str]
+@pytest.mark.parametrize(("signed", "status"), [(False, 403), (True, 503)])
+def test_recording_without_a_fetcher_checks_the_signature_first(
+    client: TestClient, pipeline: FakePipeline, recording: dict[str, str], signed: bool, status: int
 ) -> None:
-    response = post(client, RECORDING, recording)
-    assert response.status_code == 503
+    response = post(client, RECORDING, recording, signature=None if signed else "bad")
+    assert response.status_code == status
     assert not pipeline.seen
+
+
+@pytest.mark.parametrize(("signed", "status"), [(False, 403), (True, 503)])
+def test_sms_without_a_pipeline_checks_the_signature_first(
+    twilio: TestClient, sms: dict[str, str], signed: bool, status: int
+) -> None:
+    cast(FastAPI, twilio.app).state.convintel.pipeline = None
+    response = post(twilio, SMS, sms, signature=None if signed else "bad")
+    assert response.status_code == status
+
+
+def test_pipeline_never_sees_the_deleted_recording_path(
+    twilio: TestClient, pipeline: FakePipeline, recording: dict[str, str]
+) -> None:
+    assert post(twilio, RECORDING, recording).status_code == 204
+    assert pipeline.seen[0].audio_uri is None
