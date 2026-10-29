@@ -28,8 +28,10 @@ from scripts.synth.storage import digest, load_samples, read_jsonl, write_json, 
 from scripts.synth.taxonomy import (
     CONFUSABLE_FAMILIES,
     DESCRIPTIONS,
+    INTENT_DESCRIPTIONS,
     INTENT_DESCRIPTIONS_V1,
     INTENT_DESCRIPTIONS_V2,
+    INTENT_DESCRIPTIONS_V3,
     INTENTS,
 )
 from scripts.synth.validation import redact_unowned
@@ -114,6 +116,30 @@ def test_description_leakage_audit() -> None:
     copied = {"card_arrival": f"Customer asks: {reference[0]}"}
     containing, _ = description_overlaps(copied, reference)
     assert containing == ["card_arrival"]
+
+
+def test_taxonomy_v3_separates_extra_charge_from_not_recognised_without_wiring() -> None:
+    reference = [
+        Utterance.model_validate_json(line).text
+        for line in (ROOT / "tests/synth/banking77_test_fixture.jsonl").open()
+    ]
+    assert description_overlaps(INTENT_DESCRIPTIONS_V3, reference) == ([], {})
+    changed = {
+        name for name in INTENTS if INTENT_DESCRIPTIONS_V2[name] != INTENT_DESCRIPTIONS_V3[name]
+    }
+    assert changed == {"extra_charge_on_statement", "card_payment_not_recognised"}
+    extra = INTENT_DESCRIPTIONS_V3["extra_charge_on_statement"]
+    not_recognised = INTENT_DESCRIPTIONS_V3["card_payment_not_recognised"]
+    assert "unexplained" not in extra and "one unit of currency" in extra
+    assert "unknown merchant" in extra and "small extra charge" in not_recognised
+    assert all("\n" not in text for text in INTENT_DESCRIPTIONS_V3.values())
+    # Nothing generates or judges against v3 yet: v2 stays current and unchanged.
+    assert 3 not in DESCRIPTIONS and 3 not in JUDGE_TAXONOMY.values()
+    assert INTENT_DESCRIPTIONS is INTENT_DESCRIPTIONS_V2 is DESCRIPTIONS[2]
+    assert "unexplained" in INTENT_DESCRIPTIONS_V2["extra_charge_on_statement"]
+    scenario = scenarios(42)[0]
+    with pytest.raises(ValueError):
+        ScenarioV3.model_validate(scenario.model_dump() | {"taxonomy_version": 3})
 
 
 def test_rejected_text_keeps_markers_and_redacts_invented_pii() -> None:

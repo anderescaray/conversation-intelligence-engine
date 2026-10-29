@@ -598,6 +598,63 @@ lo que se solapa con «not recognised» de `card_payment_not_recognised`.
 2. Si se confirma el solapamiento, crear las descripciones de intent v3 como versión nueva, sin
    tocar la v2, con un juez nuevo ligado a ellas.
 
+**Auditoría del par (2026-10-29, local, sin llamadas).** Split de train de Banking77 en caché
+local (9.993 frases); recuentos por expresiones regulares simples, sin guardar textos.
+
+| Rasgo | `extra_charge_on_statement` (166) | `card_payment_not_recognised` (168) | `card_payment_fee_charged` (187) |
+| --- | ---: | ---: | ---: |
+| Importe de una unidad (£1, $1, «a pound») | 125 | 0 | 0 |
+| «extra», «additional», «overcharged» | 94 | 1 | 69 |
+| «fee» | 50 | 0 | 138 |
+| Pendiente o retenido | 20 | 1 | 2 |
+| No lo hizo o no lo reconoce | 10 | 130 | 1 |
+| Comercio o nombre desconocido | 1 | 20 | 3 |
+| Fraude o alguien con acceso | 2 | 24 | 0 |
+| Congelar o cancelar la tarjeta | 0 | 12 | 0 |
+| Pagó con la tarjeta | 0 | 18 | 117 |
+
+- **Se confirma el solapamiento.** `extra_charge_on_statement` trata de un cargo o comisión extra
+  pequeño, casi siempre de una unidad y a veces pendiente, sin compra ni comercio detrás; solo 4 de
+  166 no mencionan importe, «extra» ni «fee». `card_payment_not_recognised` trata de un pago a un
+  comercio que el cliente no hizo o no reconoce, a menudo con miedo al fraude, y nunca nombra un
+  importe ni una comisión. La v2 no recoge el rasgo dominante del primero («unexplained» y «on the
+  statement» son justo lo que comparten). La zona gris real es pequeña: 21 ejemplos de
+  `extra_charge_on_statement` dicen no reconocer el cargo, y 19 de ellos citan el importe de una
+  unidad; 30 de `card_payment_not_recognised` hablan solo de un pago «strange» o «random».
+- **Segundo solapamiento, de redacción:** `card_payment_fee_charged` v2 dice «unexpected extra fee».
+  Sus ejemplos se anclan en pagar con la tarjeta (117/187), que nunca aparece en
+  `extra_charge_on_statement`. Basta con excluirlo desde la descripción de este; la de
+  `card_payment_fee_charged` no cambia.
+- **Sin solapamiento:** `cash_withdrawal_not_recognised` (131/160 citan efectivo o cajero) y
+  `direct_debit_payment_not_recognised` (130/182 citan «direct debit») están anclados en su canal,
+  igual que los dos intents de tipo de cambio «unexpected» (163/167 y 125/163 citan el tipo).
+
+**Taxonomía v3 (propuesta, sin conectar).** `INTENT_DESCRIPTIONS_V3` en
+`scripts/synth/taxonomy.py`: es la v2 con dos descripciones nuevas.
+- `extra_charge_on_statement`: «A small extra charge or fee, often about one unit of currency and
+  sometimes still pending, shows on the statement and the customer asks what it is for; not a
+  payment to an unknown merchant, a fee caused by using the card to pay, or a duplicate.»
+- `card_payment_not_recognised`: «The customer says they did not make a card payment to a merchant,
+  or do not recognise the merchant, and may fear that someone else is using the card; a small extra
+  charge of unclear origin belongs elsewhere.»
+
+Ninguna contiene una frase de Banking77 ni comparte 6 palabras seguidas con ella
+(`scripts.synth.audit --descriptions-against … --taxonomy-version 3`, las mismas 13.069 frases
+locales de train y test). La v3 queda fuera de `DESCRIPTIONS`, así que ningún prompt, generador,
+juez ni escenario puede usarla todavía. Un test lo comprueba. «Una unidad» es un rasgo de
+Banking77, no de la banca en general; se acepta porque el objetivo es etiquetar como Banking77.
+
+**Candidatos afectados.** Los 6 huecos del plan v4 de estos tres intents ya tienen candidato.
+Con la v3 cambian las descripciones de 4 de los 132, y ninguno de los 85 mantenidos:
+- `synth-v4-42-079` (chat) y `synth-v4-42-092` (voz), de `extra_charge_on_statement`: son las dos
+  alarmas de intent y ya están entre los 47 cambiados.
+- `synth-v4-42-029` (voz) y `synth-v4-42-048` (chat), de `card_payment_not_recognised`: cambiaron
+  solo en inicio. El juez Sonnet confirmó su intent.
+
+Siguen pendientes, y fuera de esta propuesta: decidir sobre la v3, ligarla a un prompt del
+generador y a un juez nuevos (con el par en «Confusable intents» de una guía v3) y pasar una puerta
+con un control válido y otro roto para este par antes de regenerar.
+
 ## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
 
 **Guía de etiquetado.** `evals/datasets/labeling-guide-v1.md` es inmutable y se incrusta literalmente

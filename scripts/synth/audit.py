@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from convintel.contracts import Conversation
 
 from .storage import file_hash, read_jsonl, write_json
-from .taxonomy import DESCRIPTIONS
+from .taxonomy import DESCRIPTIONS, INTENT_DESCRIPTIONS_V3
 from .validation import text_key
 
 
@@ -97,14 +97,15 @@ def main() -> int:
         type=Path,
         help="Audit intent descriptions against a local Banking77 CSV/JSONL snapshot instead",
     )
-    parser.add_argument("--taxonomy-version", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--taxonomy-version", type=int, choices=(1, 2, 3), default=2)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Audit output already exists")
     if args.descriptions_against:
         reference = read_reference(args.descriptions_against)
-        descriptions = DESCRIPTIONS[args.taxonomy_version]
+        # v3 is audited before any generator or judge may use it.
+        descriptions = {**DESCRIPTIONS, 3: INTENT_DESCRIPTIONS_V3}[args.taxonomy_version]
         containing, sharing = description_overlaps(descriptions, reference)
         report = DescriptionAudit(
             reference_sha256=file_hash(args.descriptions_against),

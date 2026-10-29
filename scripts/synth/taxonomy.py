@@ -5,8 +5,11 @@ candidates were generated and judged against. Version 1 served generators up to 
 prompt v2. Version 2 (generator 3.3, judge prompt v3) follows an audit against Banking77 train
 examples: four descriptions contradicted their examples, confusable families got disambiguating
 wording that labeling-guide-v1 repeats verbatim, and three were reworded only so that no
-description shares six consecutive words with a Banking77 utterance. Descriptions paraphrase;
-they never quote an utterance.
+description shares six consecutive words with a Banking77 utterance. Version 3 is a proposal
+for the next regeneration: the judge read two extra_charge_on_statement candidates as
+card_payment_not_recognised because "unexplained" and "not recognised" overlap, while the train
+examples separate them cleanly. It is deliberately left out of `DESCRIPTIONS` until a prompt and
+judge are bound to it. Descriptions paraphrase; they never quote an utterance.
 """
 
 from typing import Literal
@@ -227,6 +230,22 @@ INTENT_DESCRIPTIONS_V2: dict[str, str] = {
     **CONFUSABLE_FAMILIES,
     **_REWORDED_FOR_LEAKAGE,
 }
+# Train split: 125/166 extra_charge_on_statement examples name an amount of about one unit of
+# currency and none mention paying with the card; card_payment_not_recognised never names an
+# amount or a fee and 130/168 say the payment was not made or not recognised.
+_SEPARATED_FROM_EXTRA_CHARGE: dict[str, str] = {
+    "extra_charge_on_statement": (
+        "A small extra charge or fee, often about one unit of currency and sometimes still "
+        "pending, shows on the statement and the customer asks what it is for; not a payment to "
+        "an unknown merchant, a fee caused by using the card to pay, or a duplicate."
+    ),
+    "card_payment_not_recognised": (
+        "The customer says they did not make a card payment to a merchant, or do not recognise "
+        "the merchant, and may fear that someone else is using the card; a small extra charge "
+        "of unclear origin belongs elsewhere."
+    ),
+}
+INTENT_DESCRIPTIONS_V3: dict[str, str] = {**INTENT_DESCRIPTIONS_V2, **_SEPARATED_FROM_EXTRA_CHARGE}
 DESCRIPTIONS: dict[TaxonomyVersion, dict[str, str]] = {
     1: INTENT_DESCRIPTIONS_V1,
     2: INTENT_DESCRIPTIONS_V2,
