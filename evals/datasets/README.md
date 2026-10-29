@@ -651,9 +651,18 @@ Con la v3 cambian las descripciones de 4 de los 132, y ninguno de los 85 manteni
 - `synth-v4-42-029` (voz) y `synth-v4-42-048` (chat), de `card_payment_not_recognised`: cambiaron
   solo en inicio. El juez Sonnet confirmó su intent.
 
-Siguen pendientes, y fuera de esta propuesta: decidir sobre la v3, ligarla a un prompt del
-generador y a un juez nuevos (con el par en «Confusable intents» de una guía v3) y pasar una puerta
-con un control válido y otro roto para este par antes de regenerar.
+**Decisión de Ander (2026-10-29): se acepta la v3 tal como se propone**, incluida la redacción de
+«una unidad», porque se etiqueta como Banking77 y así queda documentado. La v3 sigue sin conectar
+hasta que se completen los pasos 1 y 2 del plan.
+
+**Plan de noviembre, en este orden:**
+1. Guía de etiquetado v3: la v2 más este par en «Confusable intents», con las descripciones v3.
+2. Versiones nuevas del prompt del generador y del juez, ligadas a las descripciones v3 y a la
+   guía v3. Los prompts y jueces anteriores no cambian.
+3. Puerta nueva: los controles de la puerta v3 más un control válido y otro roto para este par.
+   Tiene que pasar todos los controles, con las mismas reglas: si falla, no se ajustan prompts ni
+   controles y no se sigue.
+4. Regenerar los 47 huecos cambiados y los 18 sin rellenar.
 
 ## Generador 3.3 (2026-10-20): guía de etiquetado v1 y puerta v2
 
