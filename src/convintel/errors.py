@@ -33,3 +33,20 @@ class TranscriptionError(ConvIntelError):
 
 class LLMError(ConvIntelError):
     """An LLM call failed after retries, or returned output that does not fit the schema."""
+
+
+class PipelineError(ConvIntelError):
+    """The pipeline stopped before producing insights: a fail-closed step failed.
+
+    Today the only such step is PII redaction: no operator may see unredacted text, so a
+    redaction failure aborts the whole analysis instead of returning partial insights. Carries
+    the failed stage, never the underlying message (it could quote the conversation). The
+    stage goes to `args` so the error survives pickling, like `OperatorError`.
+    """
+
+    def __init__(self, stage: str) -> None:
+        super().__init__(stage)
+        self.stage = stage
+
+    def __str__(self) -> str:
+        return f"pipeline stopped at {self.stage}"
