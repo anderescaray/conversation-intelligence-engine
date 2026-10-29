@@ -41,7 +41,10 @@ is kept, e.g. order numbers.
   Presidio are not documented as thread-safe and every redactor shares the analyzer. One
   conversation is analyzed at a time per process, so **scale with worker processes**
   (uvicorn/gunicorn workers, more replicas), not threads.
-- Span `operator.pii` with `conversation.id`, `operator.version`, `model.id`, `pii.entity_count`.
+- `run()` does not open a span: it annotates the caller's current span (a no-op when there is
+  none). The pipeline wraps the call with `traced("operator.pii")`, which records latency,
+  errors and `operator.version` once. Attributes: `conversation.id`, `model.id`,
+  `pii.entity_count`. Never text.
   Never put text in span attributes or logs.
 - Errors: any failure becomes `OperatorError("pii", "redaction failed (<ExceptionType>)")`, with
   no chained cause. Third-party messages can quote the input, and OTel span exception events

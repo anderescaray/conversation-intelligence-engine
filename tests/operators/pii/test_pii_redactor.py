@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import spacy.cli
+from opentelemetry import trace
 from pii_synthetic_cases import CASES, PIICase, make_conversation, recalled
 from presidio_analyzer import AnalyzerEngine, RecognizerResult
 
@@ -273,11 +274,10 @@ async def test_errors_never_carry_turn_text(
     def failing_analyze(text: str, **kwargs: Any) -> list[RecognizerResult]:
         raise ValueError(f"cannot parse {text!r}")
 
-    tracer = _RecordingTracer()
-    monkeypatch.setattr(redactor_module, "_tracer", tracer)
+    tracer = _RecordingTracer()  # stands in for the span the pipeline opens around run()
     monkeypatch.setattr(analyzer, "analyze", failing_analyze)
 
-    with pytest.raises(OperatorError) as excinfo:
+    with pytest.raises(OperatorError) as excinfo, tracer.start_as_current_span("operator.pii"):
         await PIIRedactor(analyzer=analyzer).run(make_conversation(f"mail {secret}"))
 
     error = excinfo.value
@@ -287,6 +287,20 @@ async def test_errors_never_carry_turn_text(
     assert secret not in "".join(traceback.format_exception(error))
     assert len(tracer.recorded) == 1
     assert secret not in tracer.recorded[0]
+
+
+async def test_run_annotates_the_callers_span(analyzer: AnalyzerEngine) -> None:
+    # The pipeline opens operator.pii with traced(); a span opened inside run() would
+    # double-count latency and errors, and these attributes would land on it instead.
+    secret = "marisol.q@example.com"
+    parent = MagicMock(spec=trace.Span)
+    with trace.use_span(parent, end_on_exit=False):
+        await PIIRedactor(analyzer=analyzer).run(make_conversation(f"mail {secret}"))
+
+    attributes = {c.args[0]: c.args[1] for c in parent.set_attribute.call_args_list}
+    assert attributes["pii.entity_count"] >= 1
+    assert str(attributes["model.id"]).startswith("presidio/")
+    assert secret not in repr(attributes)
 
 
 async def test_concurrent_runs_are_serialized(
