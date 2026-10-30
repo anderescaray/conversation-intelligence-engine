@@ -137,6 +137,11 @@ class LLMClient:
         self._rand = rand
 
     @property
+    def settings(self) -> Settings:
+        """The settings this client calls the provider with (callers validate them at startup)."""
+        return self._settings
+
+    @property
     def model_id(self) -> str:
         return f"{self._settings.llm_provider}:{self._settings.llm_model}"
 
