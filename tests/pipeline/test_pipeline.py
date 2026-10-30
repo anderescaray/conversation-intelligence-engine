@@ -37,11 +37,11 @@ class _Parts:
         sentiment_error: OperatorError | None = None,
         summary_cost: float | None = None,
         summary_tokens: int | None = None,
-        failing_warmup: str | None = None,
+        failing_warmups: tuple[str, ...] = (),
         warmup_hook: WarmupHook | None = None,
     ) -> None:
         def warmup_error(name: str) -> OperatorError | None:
-            return OperatorError(name, "model missing") if name == failing_warmup else None
+            return OperatorError(name, "model missing") if name in failing_warmups else None
 
         self.redactor = redactor or FakeRedactor(
             warmup_error=warmup_error("pii"), warmup_hook=warmup_hook
@@ -224,16 +224,29 @@ async def test_warmup_warms_every_operator_once() -> None:
     assert [o.warmups for o in operators] == [1, 1, 1, 1]
 
 
+def _operator_error(operator: str) -> pytest.RaisesExc[OperatorError]:
+    return pytest.RaisesExc(OperatorError, check=lambda exc: exc.operator == operator)
+
+
 @pytest.mark.parametrize("failing", ["pii", "sentiment", "summary", "intent"])
 async def test_a_failing_warmup_aborts_startup_and_the_graph_is_not_compiled(
     failing: str,
 ) -> None:
-    pipeline = _Parts(failing_warmup=failing).pipeline()
+    pipeline = _Parts(failing_warmups=(failing,)).pipeline()
 
-    with pytest.raises(OperatorError) as excinfo:
+    with pytest.RaisesGroup(_operator_error(failing)):
         await pipeline.warmup()
 
-    assert excinfo.value.operator == failing
+    with pytest.raises(RuntimeError, match="before warmup"):
+        await pipeline.analyze(make_conversation())
+
+
+async def test_every_failed_warmup_is_reported_together() -> None:
+    pipeline = _Parts(failing_warmups=("pii", "summary")).pipeline()
+
+    with pytest.RaisesGroup(_operator_error("pii"), _operator_error("summary")):
+        await pipeline.warmup()
+
     with pytest.raises(RuntimeError, match="before warmup"):
         await pipeline.analyze(make_conversation())
 
