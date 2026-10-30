@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import httpx
+import ollama
 import pytest
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
@@ -120,6 +121,18 @@ async def test_ollama_client_errors_fail_fast(prompt: Prompt, code: int) -> None
 
     with pytest.raises(LLMError, match="call failed: ResponseError"):
         await client.structured(Answer, prompt, operator="demo", conversation="hi")
+    assert len(requests) == 1
+
+
+async def test_ollama_in_band_stream_error_fails_fast(prompt: Prompt) -> None:
+    """An `{"error": ...}` line after a 200 has no status code (-1) and may be input-caused."""
+    in_band = httpx.Response(200, content=b'{"error": "scripted failure"}\n')
+    client, requests = _client([in_band, _ok()])
+
+    with pytest.raises(LLMError, match="call failed: ResponseError") as info:
+        await client.structured(Answer, prompt, operator="demo", conversation="hi")
+    assert isinstance(info.value.__cause__, ollama.ResponseError)
+    assert info.value.__cause__.status_code == -1
     assert len(requests) == 1
 
 
