@@ -4,6 +4,10 @@ from pathlib import Path
 import pytest
 import spacy
 import tldextract
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pii_synthetic_cases import SYNTHETIC_NAMES
 from presidio_analyzer import AnalyzerEngine, PatternRecognizer
 
@@ -45,3 +49,13 @@ def analyzer(blank_spacy_model: Path) -> AnalyzerEngine:
 @pytest.fixture
 def redactor(analyzer: AnalyzerEngine) -> PIIRedactor:
     return PIIRedactor(analyzer=analyzer, spacy_model="blank_en")
+
+
+@pytest.fixture
+def spans(monkeypatch: pytest.MonkeyPatch) -> Iterator[InMemorySpanExporter]:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(trace, "get_tracer", provider.get_tracer)
+    yield exporter
+    provider.shutdown()
