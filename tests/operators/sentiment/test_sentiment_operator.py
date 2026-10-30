@@ -3,8 +3,10 @@ import threading
 import time
 import traceback
 from collections.abc import Sequence
+from unittest.mock import MagicMock
 
 import pytest
+from opentelemetry import trace
 from sentiment_fakes import (
     NEG,
     NEU,
@@ -121,9 +123,7 @@ async def test_model_failures_become_operator_errors(error: Exception) -> None:
 
 
 @pytest.mark.parametrize("error_type", [OSError, RuntimeError, ValueError, LabelMappingError])
-async def test_errors_never_carry_turn_text(
-    error_type: type[Exception], monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_errors_never_carry_turn_text(error_type: type[Exception]) -> None:
     """Mirror of the PII test: a redaction miss must not leak through an error either."""
     secret = "call Marisol Quintavalle on 415-555-0123"
 
@@ -131,10 +131,12 @@ async def test_errors_never_carry_turn_text(
         def predict(self, texts: Sequence[str]) -> list[SentimentScores]:
             raise error_type(f"pipeline failed on {texts[0]!r}")
 
-    tracer = RecordingTracer()
-    monkeypatch.setattr(operator_module, "_tracer", tracer)
+    tracer = RecordingTracer()  # stands in for the span the pipeline opens around run()
 
-    with pytest.raises(OperatorError) as excinfo:
+    with (
+        pytest.raises(OperatorError) as excinfo,
+        tracer.start_as_current_span("operator.sentiment"),
+    ):
         await SentimentOperator(model=Leaky({})).run(make_conversation((C, secret)))
 
     error = excinfo.value
@@ -144,6 +146,24 @@ async def test_errors_never_carry_turn_text(
     assert secret not in "".join(traceback.format_exception(error))
     assert len(tracer.recorded) == 1
     assert secret not in tracer.recorded[0]
+
+
+async def test_run_annotates_the_callers_span() -> None:
+    # The pipeline opens operator.sentiment with traced(); a span opened inside run() would
+    # duplicate it, and these attributes would land on the inner span instead.
+    secret = "my card was charged twice and nobody answers"
+    parent = MagicMock(spec=trace.Span)
+    with trace.use_span(parent, end_on_exit=False):
+        result = await SentimentOperator(model=FakeSentimentModel({secret: NEG})).run(
+            make_conversation((C, secret), (A, "let me check"))
+        )
+
+    attributes = {c.args[0]: c.args[1] for c in parent.set_attribute.call_args_list}
+    assert attributes["sentiment.customer_turns"] == 1
+    assert attributes["sentiment.overall"] == result.output.overall.value
+    assert attributes["model.id"] == FakeSentimentModel.model_id
+    assert "operator.version" not in attributes  # traced() sets it, once
+    assert secret not in repr(attributes)
 
 
 async def test_concurrent_runs_are_serialized() -> None:

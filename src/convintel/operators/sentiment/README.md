@@ -24,8 +24,10 @@
   `OperatorError("sentiment", "sentiment inference failed (<ExceptionType>)")`, with no chained
   cause, so text quoted in third-party messages never reaches spans or logs (same policy as the
   PII redactor).
-- Span `operator.sentiment` with `conversation.id`, `operator.version`, `model.id`,
-  `sentiment.customer_turns`, `sentiment.overall`.
+- `run()` does not open a span: it annotates the caller's current span (a no-op when there is
+  none). The pipeline wraps the call with `traced("operator.sentiment")`, which records latency,
+  errors and `operator.version` once. Attributes: `conversation.id`, `model.id`,
+  `sentiment.customer_turns`, `sentiment.overall`. Never text.
 
 ## Tests
 
