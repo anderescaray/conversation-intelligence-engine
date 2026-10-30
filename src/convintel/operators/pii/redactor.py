@@ -6,6 +6,7 @@ import time
 from collections.abc import Sequence
 
 from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 from presidio_analyzer import AnalyzerEngine, RecognizerResult
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import RecognizerResult as AnonymizerSpan
@@ -23,6 +24,9 @@ shares the process-wide analyzer. One analysis at a time per process; scale with
 processes.
 """
 
+_WARMUP_TEXT = "I would like to check my card balance"
+"""Fixed and free of PII: warmup spans and errors can never carry conversation text."""
+
 DEFAULT_SCORE_THRESHOLD = 0.35
 """Keeps Presidio's unvalidated phone matches (0.4) and drops bare account-like numbers (0.05).
 
@@ -36,6 +40,9 @@ class PIIRedactor:
 
     Entity offsets in the output refer to the original turn text, so they can be audited
     against the source; the redacted conversation keeps the turn structure unchanged.
+
+    Call `warmup()` at startup so a missing spaCy model fails startup instead of the first
+    request; `run()` still loads lazily if it was not called.
     """
 
     name = "pii"
@@ -55,6 +62,32 @@ class PIIRedactor:
     @property
     def model_id(self) -> str:
         return f"presidio/{self._spacy_model}"
+
+    async def warmup(self) -> None:
+        """Load the shared analyzer and run one analysis now, so startup fails fast if the
+        spaCy model is missing and the first request does not pay for loading it."""
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span(
+            f"operator.{self.name}.warmup", record_exception=False, set_status_on_exception=False
+        ) as span:
+            span.set_attribute("operator.version", self.version)
+            span.set_attribute("model.id", self.model_id)
+            try:
+                try:
+                    analyzer = await asyncio.to_thread(self._warm)
+                except OperatorError:
+                    raise
+                except Exception as exc:
+                    # Same policy as run(): third-party messages keep only their type.
+                    raise OperatorError(
+                        self.name, f"warmup failed ({type(exc).__name__})"
+                    ) from None
+            except OperatorError as exc:
+                span.set_attribute("error.type", type(exc).__name__)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
+            # Keep the warmed analyzer: run() must use the model that was checked at startup.
+            self._analyzer = analyzer
 
     async def run(self, conversation: Conversation) -> OperatorResult[PIIOutput]:
         # The caller opens the span with traced() and records latency and errors once; the
@@ -87,6 +120,17 @@ class PIIRedactor:
         analyzer = self._analyzer or get_analyzer(self._spacy_model)
         with _inference_lock:
             return self._redact_with(analyzer, conversation)
+
+    def _warm(self) -> AnalyzerEngine:
+        analyzer = self._analyzer or get_analyzer(self._spacy_model)
+        with _inference_lock:
+            analyzer.analyze(
+                _WARMUP_TEXT,
+                language="en",
+                entities=list(SUPPORTED_ENTITIES),
+                score_threshold=self._score_threshold,
+            )
+        return analyzer
 
     def _redact_with(self, analyzer: AnalyzerEngine, conversation: Conversation) -> PIIOutput:
         entities: list[PIIEntity] = []

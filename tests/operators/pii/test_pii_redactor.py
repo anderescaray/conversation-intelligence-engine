@@ -11,6 +11,8 @@ from unittest.mock import MagicMock
 import pytest
 import spacy.cli
 from opentelemetry import trace
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 from pii_synthetic_cases import CASES, PIICase, make_conversation, recalled
 from presidio_analyzer import AnalyzerEngine, RecognizerResult
 
@@ -331,3 +333,77 @@ async def test_concurrent_runs_are_serialized(
 
     assert calls == 6
     assert peak == 1
+
+
+async def test_warmup_loads_the_analyzer_once_and_run_reuses_it(
+    analyzer: AnalyzerEngine, monkeypatch: pytest.MonkeyPatch, spans: InMemorySpanExporter
+) -> None:
+    requested: list[str] = []
+    analyzed: list[str] = []
+    analyze = analyzer.analyze
+
+    def spy(text: str, **kwargs: Any) -> list[RecognizerResult]:
+        analyzed.append(text)
+        return analyze(text, **kwargs)
+
+    def load_once(spacy_model: str) -> AnalyzerEngine:
+        requested.append(spacy_model)
+        return analyzer
+
+    monkeypatch.setattr(analyzer, "analyze", spy)
+    monkeypatch.setattr(redactor_module, "get_analyzer", load_once)
+    redactor = PIIRedactor(spacy_model="en_core_web_sm")
+
+    await redactor.warmup()
+    monkeypatch.setattr(redactor_module, "get_analyzer", _never_load)
+    result = await redactor.run(make_conversation("Call 415-555-0123"))
+
+    assert requested == ["en_core_web_sm"]
+    assert analyzed == [redactor_module._WARMUP_TEXT, "Call 415-555-0123"]  # pyright: ignore[reportPrivateUsage]
+    assert result.output.redacted_conversation.turns[0].text == "Call <PHONE_NUMBER>"
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.pii.warmup"]
+    attributes = span.attributes or {}
+    assert attributes["model.id"] == "presidio/en_core_web_sm"
+    assert attributes["operator.version"] == redactor.version
+    assert span.status.status_code is not StatusCode.ERROR
+
+
+async def test_warmup_text_has_no_pii(redactor: PIIRedactor) -> None:
+    # Warmup spans and errors may carry it; it must stay free of anything to redact.
+    text = redactor_module._WARMUP_TEXT  # pyright: ignore[reportPrivateUsage]
+    result = await redactor.run(make_conversation(text))
+
+    assert result.output.entities == []
+
+
+async def test_warmup_without_the_spacy_model_fails_and_marks_the_span(
+    spans: InMemorySpanExporter,
+) -> None:
+    with pytest.raises(OperatorError, match=r"uv sync --group ml") as excinfo:
+        await PIIRedactor(spacy_model="en_core_web_not_installed").warmup()
+
+    assert excinfo.value.operator == "pii"
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.pii.warmup"]
+    assert span.status.status_code is StatusCode.ERROR
+    assert (span.attributes or {})["error.type"] == "OperatorError"
+    assert not span.events
+
+
+async def test_warmup_failures_keep_only_the_error_type(
+    analyzer: AnalyzerEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing_analyze(text: str, **kwargs: Any) -> list[RecognizerResult]:
+        raise ValueError(f"cannot parse {text!r}")
+
+    monkeypatch.setattr(analyzer, "analyze", failing_analyze)
+
+    with pytest.raises(OperatorError) as excinfo:
+        await PIIRedactor(analyzer=analyzer).warmup()
+
+    assert excinfo.value.message == "warmup failed (ValueError)"
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__
+
+
+def _never_load(spacy_model: str) -> AnalyzerEngine:
+    raise AssertionError("run() after warmup() must reuse the warmed analyzer")
