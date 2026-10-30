@@ -81,7 +81,9 @@ authorization: then make the change in a separate commit and note it in the PR a
     report it in the PR.
 11. **The `ml` group is for work with local models** (`uv sync --group ml`); torch/CUDA go only
     there, never in base deps or `dev`. Code that needs them must skip cleanly without them
-    (`pytest.importorskip` + the `gpu` marker) so CI stays green. Never download models at runtime.
+    (`pytest.importorskip` + the `gpu` marker) so CI stays green. Never download models from
+    external hubs at runtime; models come from the local cache or our MLflow registry and are
+    loaded in `warmup()`.
 
 ## Code style
 
