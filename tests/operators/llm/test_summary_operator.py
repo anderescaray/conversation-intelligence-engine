@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
+from opentelemetry import trace
 from pydantic import SecretStr
 
 from convintel.config import Settings
@@ -87,6 +89,26 @@ async def test_conversation_is_sent_inside_delimiters() -> None:
     # The injected closing tag in turn 2 must not end the data block early.
     assert text.count("</conversation>") == 1
     assert snapshot == _CONVERSATION
+
+
+async def test_run_annotates_the_callers_span() -> None:
+    # The pipeline opens operator.summary with traced(); a span opened inside run() would
+    # double-count latency and errors, and these attributes would land on it instead.
+    operator, _ = _operator(
+        tool_answer(SummaryOutput, _SUMMARY, input_tokens=400, output_tokens=60)
+    )
+    parent = MagicMock(spec=trace.Span)
+    with trace.use_span(parent, end_on_exit=False):
+        result = await operator.run(_CONVERSATION)
+
+    attributes = {c.args[0]: c.args[1] for c in parent.set_attribute.call_args_list}
+    assert attributes["prompt.version"] == "summary/v1"
+    assert attributes["model.id"] == result.model_id
+    assert (attributes["llm.tokens.input"], attributes["llm.tokens.output"]) == (400, 60)
+    assert result.cost_usd is not None  # the default model has a known price
+    assert attributes["llm.cost_usd"] == pytest.approx(result.cost_usd)
+    assert "operator.version" not in attributes  # traced() sets it, once
+    assert all(turn.text not in repr(attributes) for turn in _CONVERSATION.turns)
 
 
 async def test_llm_failure_becomes_operator_error() -> None:
