@@ -56,9 +56,12 @@ def _is_retryable(exc: BaseException) -> bool:
 
     Anthropic 5xx includes 529 `OverloadedError`, which is common under load and is not a
     subclass of `InternalServerError`, so the status code is checked instead of the class.
+    ChatOllama always streams, so the Ollama path surfaces raw httpx transport errors (connect
+    failures, resets, a body cut short) instead of the builtin `ConnectionError` that ollama
+    only maps to on non-streaming requests.
     """
     if isinstance(exc, ollama.ResponseError):
-        return exc.status_code == 429
+        return exc.status_code == 429 or exc.status_code >= 500
     if isinstance(exc, anthropic.APIStatusError):
         return exc.status_code == 429 or exc.status_code >= 500
     return isinstance(
@@ -66,6 +69,8 @@ def _is_retryable(exc: BaseException) -> bool:
         anthropic.RateLimitError
         | anthropic.APIConnectionError  # includes APITimeoutError
         | httpx.TimeoutException
+        | httpx.NetworkError  # connect, read, write and close failures
+        | httpx.RemoteProtocolError  # server closed the connection mid-response
         | ConnectionError
         | TimeoutError,
     )
