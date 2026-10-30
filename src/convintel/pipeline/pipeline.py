@@ -35,6 +35,10 @@ from .state import PipelineState
 
 _tracer = trace.get_tracer(__name__)
 
+# Upper bound for all warmups together. A hung model download or load must fail startup
+# instead of leaving the service up but never ready. Generous: a cold start downloads weights.
+PIPELINE_WARMUP_TIMEOUT_S = 300.0
+
 
 class WarmableOperator[T: BaseModel](Operator[T], Protocol):
     """An operator that loads (or validates) what it needs in ``warmup()``, at startup.
@@ -91,13 +95,21 @@ class Pipeline:
         once. Cancellation only stops waiting: work already handed to ``asyncio.to_thread``
         (model loading, the warmup inference) cannot be interrupted and runs to completion in
         its thread. On any failure the graph stays uncompiled, so ``analyze()`` keeps
-        refusing to run.
+        refusing to run. If the warmups together take longer than
+        ``PIPELINE_WARMUP_TIMEOUT_S``, they are cancelled and ``PipelineError("warmup_timeout")``
+        is raised; threads already running keep running, as above.
         """
-        async with asyncio.TaskGroup() as warmups:
-            warmups.create_task(self._redactor.warmup())
-            warmups.create_task(self._sentiment.warmup())
-            warmups.create_task(self._summary.warmup())
-            warmups.create_task(self._intent.warmup())
+        try:
+            async with asyncio.timeout(PIPELINE_WARMUP_TIMEOUT_S):
+                async with asyncio.TaskGroup() as warmups:
+                    warmups.create_task(self._redactor.warmup())
+                    warmups.create_task(self._sentiment.warmup())
+                    warmups.create_task(self._summary.warmup())
+                    warmups.create_task(self._intent.warmup())
+        except TimeoutError:
+            # Only our deadline gets here bare: a warmup's own TimeoutError arrives wrapped in
+            # the TaskGroup's ExceptionGroup.
+            raise PipelineError("warmup_timeout") from None
         # `is not None`, not `or`: an override of 0.0 ("never verify") is a valid value.
         threshold = (
             self._threshold_override
