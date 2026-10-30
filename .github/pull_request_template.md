@@ -17,7 +17,7 @@ Closes #<issue> · Task file: `docs/tasks/Txx-*.md` · Agent: <Claude Code | Dev
 - [ ] Spans + metrics added per `docs/ARCHITECTURE.md#telemetry`
 - [ ] No PII in logs or fixtures, no secrets, no inline prompts
 - [ ] New dependencies justified below
-- [ ] ADR added if a technical decision was made
+- [ ] ADR proposed in this PR if a technical decision was made (the human numbers and creates it)
 
 ## Requests for other lanes
 <!-- Needed changes outside this task's scope -->
