@@ -69,7 +69,7 @@ authorization: then make the change in a separate commit and note it in the PR a
 6. **No secrets in code.** Read config from env via `convintel.config.Settings`. Add new
    variables to `.env.example` (a test enforces it). In tests, build `Settings(_env_file=None)`
    and call `get_settings.cache_clear()` so a local `.env` never leaks into assertions.
-   Never read or print `.env`.
+   Never read or print `.env` yourself; `Settings` loads it at runtime and that must not change.
 7. **New dependencies need a reason.** Add with `uv add`, and justify it in the PR.
 8. **Tests are part of the task.** New code ships with unit tests. Mock external services
    (LLM APIs, Twilio, model downloads) in unit tests. Put anything that hits the network behind `@pytest.mark.integration`.
