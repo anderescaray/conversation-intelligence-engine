@@ -1,5 +1,6 @@
 """Shared test doubles for the pipeline tests."""
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 from pydantic import BaseModel
@@ -52,8 +53,29 @@ def as_result[T: BaseModel](
     )
 
 
-class FakeOperator[T: BaseModel]:
-    """Satisfies the Operator protocol by shape: records what it saw, returns a fixed output."""
+type WarmupHook = Callable[[], Awaitable[None]]
+
+
+class FakeWarmup:
+    """Counts warmup() calls; can fail, or await a hook first (concurrency tests)."""
+
+    def __init__(
+        self, *, error: ConvIntelError | None = None, hook: WarmupHook | None = None
+    ) -> None:
+        self._warmup_error = error
+        self._warmup_hook = hook
+        self.warmups = 0
+
+    async def warmup(self) -> None:
+        self.warmups += 1
+        if self._warmup_hook is not None:
+            await self._warmup_hook()
+        if self._warmup_error is not None:
+            raise self._warmup_error
+
+
+class FakeOperator[T: BaseModel](FakeWarmup):
+    """Satisfies WarmableOperator by shape: records what it saw, returns a fixed output."""
 
     version = FAKE_VERSION
 
@@ -65,7 +87,10 @@ class FakeOperator[T: BaseModel]:
         error: ConvIntelError | None = None,
         cost_usd: float | None = None,
         input_tokens: int | None = None,
+        warmup_error: ConvIntelError | None = None,
+        warmup_hook: WarmupHook | None = None,
     ) -> None:
+        super().__init__(error=warmup_error, hook=warmup_hook)
         self.name = name
         self._output = output
         self._error = error
@@ -89,8 +114,15 @@ class FakeOperator[T: BaseModel]:
 class FakeIntentClassifier(FakeOperator[IntentOutput]):
     """Intent operator double with the τ shipped by its model bundle, known after warmup."""
 
-    def __init__(self, output: IntentOutput, *, threshold: float | None = TAU) -> None:
-        super().__init__("intent", output)
+    def __init__(
+        self,
+        output: IntentOutput,
+        *,
+        threshold: float | None = TAU,
+        warmup_error: ConvIntelError | None = None,
+        warmup_hook: WarmupHook | None = None,
+    ) -> None:
+        super().__init__("intent", output, warmup_error=warmup_error, warmup_hook=warmup_hook)
         self._threshold = threshold
         self.warmed = False
 
@@ -99,16 +131,25 @@ class FakeIntentClassifier(FakeOperator[IntentOutput]):
         return self._threshold if self.warmed else None
 
     async def warmup(self) -> None:
+        await super().warmup()
         self.warmed = True
 
 
-class FakeRedactor:
+class FakeRedactor(FakeWarmup):
     """Replaces every turn's text; can fail, or 'forget' to set the redacted flag."""
 
     name = "pii"
     version = FAKE_VERSION
 
-    def __init__(self, *, error: Exception | None = None, sets_flag: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        error: Exception | None = None,
+        sets_flag: bool = True,
+        warmup_error: ConvIntelError | None = None,
+        warmup_hook: WarmupHook | None = None,
+    ) -> None:
+        super().__init__(error=warmup_error, hook=warmup_hook)
         self._error = error
         self._sets_flag = sets_flag
         self.calls = 0

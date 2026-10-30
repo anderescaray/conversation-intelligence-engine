@@ -6,12 +6,14 @@ claim, not a proof. A redaction failure stops the analysis (fail closed); every 
 operator fails open inside the graph.
 """
 
+import asyncio
 import time
 from collections.abc import Iterable
 from typing import Any, Protocol, cast
 
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
+from pydantic import BaseModel
 
 import convintel
 from convintel.contracts.operators import Operator
@@ -34,13 +36,21 @@ from .state import PipelineState
 _tracer = trace.get_tracer(__name__)
 
 
-class IntentClassifier(Operator[IntentOutput], Protocol):
+class WarmableOperator[T: BaseModel](Operator[T], Protocol):
+    """An operator that loads (or validates) what it needs in ``warmup()``, at startup.
+
+    Constructors stay cheap and do no I/O; a missing model or a bad LLM config must fail
+    startup, not the first request.
+    """
+
+    async def warmup(self) -> None: ...
+
+
+class IntentClassifier(WarmableOperator[IntentOutput], Protocol):
     """The intent operator plus what the pipeline needs at startup: its model's τ."""
 
     @property
     def threshold(self) -> float | None: ...
-
-    async def warmup(self) -> None: ...
 
 
 async def keep_classifier_label(
@@ -54,9 +64,9 @@ class Pipeline:
     def __init__(
         self,
         *,
-        redactor: Operator[PIIOutput],
-        sentiment: Operator[SentimentOutput],
-        summary: Operator[SummaryOutput],
+        redactor: WarmableOperator[PIIOutput],
+        sentiment: WarmableOperator[SentimentOutput],
+        summary: WarmableOperator[SummaryOutput],
         intent: IntentClassifier,
         verify: VerifyFn = keep_classifier_label,
         threshold_override: float | None = None,
@@ -72,8 +82,18 @@ class Pipeline:
         self._graph: Any = None  # compiled in warmup(), once τ is known
 
     async def warmup(self) -> None:
-        """Load the intent model, resolve τ and compile the graph. Raising aborts startup."""
-        await self._intent.warmup()
+        """Warm every operator, resolve τ and compile the graph. Raising aborts startup.
+
+        The warmups run concurrently: they load independent models (or only check config),
+        so startup takes the slowest one instead of their sum. Any failure propagates and the
+        graph stays uncompiled, so ``analyze()`` keeps refusing to run.
+        """
+        await asyncio.gather(
+            self._redactor.warmup(),
+            self._sentiment.warmup(),
+            self._summary.warmup(),
+            self._intent.warmup(),
+        )
         # `is not None`, not `or`: an override of 0.0 ("never verify") is a valid value.
         threshold = (
             self._threshold_override

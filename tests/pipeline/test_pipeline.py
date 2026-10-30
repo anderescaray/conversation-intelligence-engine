@@ -1,3 +1,4 @@
+import asyncio
 import re
 import traceback
 
@@ -8,6 +9,7 @@ from pipeline_fakes import (
     FakeOperator,
     FakeRedactor,
     FakeVerifier,
+    WarmupHook,
     intent_output,
     make_conversation,
 )
@@ -35,14 +37,35 @@ class _Parts:
         sentiment_error: OperatorError | None = None,
         summary_cost: float | None = None,
         summary_tokens: int | None = None,
+        failing_warmup: str | None = None,
+        warmup_hook: WarmupHook | None = None,
     ) -> None:
-        self.redactor = redactor or FakeRedactor()
-        self.sentiment = FakeOperator("sentiment", SENTIMENT, error=sentiment_error)
+        def warmup_error(name: str) -> OperatorError | None:
+            return OperatorError(name, "model missing") if name == failing_warmup else None
+
+        self.redactor = redactor or FakeRedactor(
+            warmup_error=warmup_error("pii"), warmup_hook=warmup_hook
+        )
+        self.sentiment = FakeOperator(
+            "sentiment",
+            SENTIMENT,
+            error=sentiment_error,
+            warmup_error=warmup_error("sentiment"),
+            warmup_hook=warmup_hook,
+        )
         self.summary = FakeOperator(
-            "summary", SUMMARY, cost_usd=summary_cost, input_tokens=summary_tokens
+            "summary",
+            SUMMARY,
+            cost_usd=summary_cost,
+            input_tokens=summary_tokens,
+            warmup_error=warmup_error("summary"),
+            warmup_hook=warmup_hook,
         )
         self.intent = FakeIntentClassifier(
-            intent_output(confidence=confidence), threshold=bundle_threshold
+            intent_output(confidence=confidence),
+            threshold=bundle_threshold,
+            warmup_error=warmup_error("intent"),
+            warmup_hook=warmup_hook,
         )
         self.verifier = FakeVerifier()
 
@@ -192,3 +215,38 @@ async def test_warmup_fails_without_any_threshold() -> None:
 async def test_analyze_before_warmup_is_a_bug() -> None:
     with pytest.raises(RuntimeError):
         await _Parts().pipeline().analyze(make_conversation())
+
+
+async def test_warmup_warms_every_operator_once() -> None:
+    parts = _Parts()
+    await parts.ready()
+    operators = (parts.redactor, parts.sentiment, parts.summary, parts.intent)
+    assert [o.warmups for o in operators] == [1, 1, 1, 1]
+
+
+@pytest.mark.parametrize("failing", ["pii", "sentiment", "summary", "intent"])
+async def test_a_failing_warmup_aborts_startup_and_the_graph_is_not_compiled(
+    failing: str,
+) -> None:
+    pipeline = _Parts(failing_warmup=failing).pipeline()
+
+    with pytest.raises(OperatorError) as excinfo:
+        await pipeline.warmup()
+
+    assert excinfo.value.operator == failing
+    with pytest.raises(RuntimeError, match="before warmup"):
+        await pipeline.analyze(make_conversation())
+
+
+async def test_warmups_run_concurrently() -> None:
+    # Each warmup waits until all four have started: run one after another, the first
+    # would wait forever, so only a concurrent warmup gets past the barrier.
+    barrier = asyncio.Barrier(4)
+
+    async def wait_for_the_others() -> None:
+        await barrier.wait()
+
+    pipeline = _Parts(warmup_hook=wait_for_the_others).pipeline()
+
+    async with asyncio.timeout(1):
+        await pipeline.warmup()
