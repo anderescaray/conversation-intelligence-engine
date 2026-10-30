@@ -19,12 +19,17 @@ import convintel
 from convintel.contracts import Channel
 from convintel.contracts.schemas import SentimentOutput, SummaryOutput
 from convintel.errors import OperatorError, PipelineError
+from convintel.pipeline import pipeline as pipeline_module
 from convintel.pipeline.pipeline import Pipeline
 
 SECRET = "marisol.q@example.com"
 # The pipeline does not look inside these outputs, so unvalidated placeholders are enough.
 SENTIMENT = SentimentOutput.model_construct()
 SUMMARY = SummaryOutput.model_construct()
+
+
+async def _never_finish() -> None:
+    await asyncio.Event().wait()
 
 
 class _Parts:
@@ -38,20 +43,24 @@ class _Parts:
         summary_cost: float | None = None,
         summary_tokens: int | None = None,
         failing_warmups: tuple[str, ...] = (),
+        hanging_warmup: str | None = None,
         warmup_hook: WarmupHook | None = None,
     ) -> None:
         def warmup_error(name: str) -> OperatorError | None:
             return OperatorError(name, "model missing") if name in failing_warmups else None
 
+        def hook(name: str) -> WarmupHook | None:
+            return _never_finish if name == hanging_warmup else warmup_hook
+
         self.redactor = redactor or FakeRedactor(
-            warmup_error=warmup_error("pii"), warmup_hook=warmup_hook
+            warmup_error=warmup_error("pii"), warmup_hook=hook("pii")
         )
         self.sentiment = FakeOperator(
             "sentiment",
             SENTIMENT,
             error=sentiment_error,
             warmup_error=warmup_error("sentiment"),
-            warmup_hook=warmup_hook,
+            warmup_hook=hook("sentiment"),
         )
         self.summary = FakeOperator(
             "summary",
@@ -59,13 +68,13 @@ class _Parts:
             cost_usd=summary_cost,
             input_tokens=summary_tokens,
             warmup_error=warmup_error("summary"),
-            warmup_hook=warmup_hook,
+            warmup_hook=hook("summary"),
         )
         self.intent = FakeIntentClassifier(
             intent_output(confidence=confidence),
             threshold=bundle_threshold,
             warmup_error=warmup_error("intent"),
-            warmup_hook=warmup_hook,
+            warmup_hook=hook("intent"),
         )
         self.verifier = FakeVerifier()
 
@@ -263,3 +272,16 @@ async def test_warmups_run_concurrently() -> None:
 
     async with asyncio.timeout(1):
         await pipeline.warmup()
+
+
+async def test_a_warmup_that_never_finishes_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pipeline_module, "PIPELINE_WARMUP_TIMEOUT_S", 0.05)
+    pipeline = _Parts(hanging_warmup="sentiment").pipeline()
+
+    with pytest.raises(PipelineError, match="warmup_timeout") as excinfo:
+        # Bounded on its own: if the deadline regresses, this fails instead of hanging.
+        await asyncio.wait_for(pipeline.warmup(), timeout=2)
+
+    assert excinfo.value.__suppress_context__
+    with pytest.raises(RuntimeError, match="before warmup"):
+        await pipeline.analyze(make_conversation())
