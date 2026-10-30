@@ -74,16 +74,20 @@ authorization: then make the change in a separate commit and note it in the PR a
    (LLM APIs, Twilio, model downloads) in unit tests. Put anything that hits the network behind `@pytest.mark.integration`.
 9. **Instrument what you build.** New code paths emit an OTel span and, if user-facing,
    a Prometheus metric following the naming in `docs/ARCHITECTURE.md#telemetry`.
-   Operators do not instrument themselves: they annotate the current span, and the pipeline
-   wraps every operator call with `traced()` (spans + latency/error metrics).
+   *Target contract (T10):* operators do not instrument themselves: they annotate the current
+   span, and the pipeline wraps every operator call with `traced()` (spans + latency/error metrics).
    Phoenix groups traces by `openinference.project.name`.
 10. **Never relax ruff, pyright or pytest configuration to make checks pass.** Fix the code or
     report it in the PR.
 11. **The `ml` group is for work with local models** (`uv sync --group ml`); torch/CUDA go only
     there, never in base deps or `dev`. Code that needs them must skip cleanly without them
     (`pytest.importorskip` + the `gpu` marker) so CI stays green. Never download models from
-    external hubs at runtime; models come from the local cache or our MLflow registry and are
-    loaded in `warmup()`.
+    external hubs at runtime; models come from the local cache or our MLflow registry.
+    *Target contract (T10):* models are loaded in `warmup()`.
+
+*Target contract (T10)* marks rules that land with T10 (branch `lane-g/T10-graph`). Until T10 is
+merged, some operators still open their own spans and some models load lazily on first use
+(tracked in #23); do not add new self-instrumentation or lazy loading.
 
 ## Code style
 
@@ -94,8 +98,9 @@ authorization: then make the change in a separate commit and note it in the PR a
 - Errors: raise domain exceptions from `convintel.errors`; never swallow exceptions silently.
   When the original exception could contain conversation text, the new error carries only
   `type(exc).__name__` and is raised with `raise ... from None`.
-- The pipeline only catches `ConvIntelError`: an expected failure degrades to a `None` result
-  plus `"<operator>:<ErrorType>"`. Any other exception is a bug and propagates.
+- *Target contract (T10):* the pipeline only catches `ConvIntelError`: an expected failure
+  degrades to a `None` result plus `"<operator>:<ErrorType>"`. Any other exception is a bug
+  and propagates.
 
 ## Git and PRs
 
