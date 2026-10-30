@@ -30,6 +30,9 @@ uv run uvicorn convintel.api.main:app --reload
 pyright ships its own Node (`pyright[nodejs]`). On Node or `libatomic` errors, run `uv sync`;
 never install Node or system packages.
 
+The Docker stack (`infra/docker-compose.yml`) is always started from the main checkout, never
+from a worktree.
+
 ## Repo map and ownership
 
 | Path | Owner | Notes |
@@ -45,7 +48,9 @@ never install Node or system packages.
 
 **Stay in your lane.** Only edit the paths listed in your task file (`docs/tasks/Txx-*.md`).
 If you need something outside your lane, stop and write it in the PR description under
-"Requests for other lanes" instead of editing it yourself.
+"Requests for other lanes" instead of editing it yourself. The only exception is explicit human
+authorization: then make the change in a separate commit and note it in the PR as
+"cross-lane change approved by the human".
 
 ## Hard rules
 
@@ -53,25 +58,30 @@ If you need something outside your lane, stop and write it in the PR description
    If a contract is wrong, say so in the PR; the human decides.
 2. **Every operator implements `Operator`** from `contracts/operators.py` and returns an
    `OperatorResult` (with `latency_ms`, `model_id`, and `cost_usd` / `prompt_version` when applicable).
-3. **No inline prompts.** Prompts live in `prompts/<name>/v<N>.yaml`. Changing a prompt means
-   adding a new version file, never editing an old one.
+3. **No inline prompts.** Prompts live in `prompts/<name>/v<N>.yaml` and are immutable once
+   used. Changing a prompt means adding a new version file, never editing an old one.
 4. **All LLM calls go through `convintel.llm.client`** (tracing, retries, token and cost accounting).
-   Never instantiate a provider SDK directly in an operator.
+   Never instantiate a provider SDK directly in an operator. Model-dependent facts (price, whether
+   sampling parameters are accepted) live in tables in the LLM client, never in prompts.
 5. **Never log raw PII.** Log conversation IDs and redacted text only. Transcripts in logs,
    traces or fixtures must be redacted or synthetic.
 6. **No secrets in code.** Read config from env via `convintel.config.Settings`. Add new
    variables to `.env.example` (a test enforces it). In tests, build `Settings(_env_file=None)`
    and call `get_settings.cache_clear()` so a local `.env` never leaks into assertions.
+   Never read or print `.env`.
 7. **New dependencies need a reason.** Add with `uv add`, and justify it in the PR.
 8. **Tests are part of the task.** New code ships with unit tests. Mock external services
    (LLM APIs, Twilio, model downloads) in unit tests. Put anything that hits the network behind `@pytest.mark.integration`.
 9. **Instrument what you build.** New code paths emit an OTel span and, if user-facing,
    a Prometheus metric following the naming in `docs/ARCHITECTURE.md#telemetry`.
+   Operators do not instrument themselves: they annotate the current span, and the pipeline
+   wraps every operator call with `traced()` (spans + latency/error metrics).
+   Phoenix groups traces by `openinference.project.name`.
 10. **Never relax ruff, pyright or pytest configuration to make checks pass.** Fix the code or
     report it in the PR.
-11. **GPU-only dependencies go in the `ml` group** (`uv sync --group ml`), never in base deps or
-    `dev`. Code that needs them must skip cleanly without them (`pytest.importorskip` + the
-    `gpu` marker) so CI stays green.
+11. **The `ml` group is for work with local models** (`uv sync --group ml`); torch/CUDA go only
+    there, never in base deps or `dev`. Code that needs them must skip cleanly without them
+    (`pytest.importorskip` + the `gpu` marker) so CI stays green. Never download models at runtime.
 
 ## Code style
 
@@ -80,6 +90,10 @@ If you need something outside your lane, stop and write it in the PR description
 - Small pure functions; side effects at the edges (API, ingest, storage).
 - Docstrings explain *why*, not *what*. No commented-out code.
 - Errors: raise domain exceptions from `convintel.errors`; never swallow exceptions silently.
+  When the original exception could contain conversation text, the new error carries only
+  `type(exc).__name__` and is raised with `raise ... from None`.
+- The pipeline only catches `ConvIntelError`: an expected failure degrades to a `None` result
+  plus `"<operator>:<ErrorType>"`. Any other exception is a bug and propagates.
 
 ## Git and PRs
 
@@ -95,7 +109,8 @@ If you need something outside your lane, stop and write it in the PR description
 - [ ] `ruff`, `pyright`, `pytest` pass locally and in CI
 - [ ] New code is traced (span) and measured (metric) where relevant
 - [ ] Docs updated (module README or `docs/`) if behaviour or interfaces changed
-- [ ] If a technical decision was made, a short ADR is added in `docs/adr/`
+- [ ] If a technical decision was made, propose it in the PR; ADRs in `docs/adr/` are numbered
+      and created by the human
 
 ## When you are unsure
 
