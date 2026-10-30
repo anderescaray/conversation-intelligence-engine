@@ -74,7 +74,7 @@ The three operators run **in parallel** (LangGraph fan-out) and join at `Aggrega
 ## Telemetry
 
 **Traces:** one root span `conversation.process` per conversation, with child spans
-`asr.transcribe`, `pii.redact`, `operator.<name>`, `llm.call`. Attributes: `conversation.id`,
+`asr.transcribe`, `operator.pii`, `operator.<name>`, `llm.call`. Attributes: `conversation.id`,
 `operator.version`, `prompt.version`, `model.id`, `llm.tokens.*`, `llm.cost_usd`.
 
 **Metrics** (Prometheus, prefix `convintel_`):
