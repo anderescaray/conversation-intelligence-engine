@@ -59,7 +59,8 @@ authorization: then make the change in a separate commit and note it in the PR a
 2. **Every operator implements `Operator`** from `contracts/operators.py` and returns an
    `OperatorResult` (with `latency_ms`, `model_id`, and `cost_usd` / `prompt_version` when applicable).
 3. **No inline prompts.** Prompts live in `prompts/<name>/v<N>.yaml` and are immutable once
-   used. Changing a prompt means adding a new version file, never editing an old one.
+   merged (ADR-0004) or once used to produce data or results, whichever comes first. Changing a
+   prompt means adding a new version file, never editing an old one.
 4. **All LLM calls go through `convintel.llm.client`** (tracing, retries, token and cost accounting).
    Never instantiate a provider SDK directly in an operator. Model-dependent facts (price, whether
    sampling parameters are accepted) live in tables in the LLM client, never in prompts.
