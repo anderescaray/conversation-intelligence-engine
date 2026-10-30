@@ -39,9 +39,10 @@ response.output, response.cost_usd, prompt.id  # Persona(...), USD or None, "my_
   If the answer does not fit the schema, the client sends **one** repair request that quotes
   the validation error. If the second answer also fails, it raises `LLMError`. Tokens from
   both attempts are counted.
-- **Retries:** rate limits, Anthropic 5xx (including 529 overloaded), timeouts and dropped
-  connections are retried with jittered exponential backoff (`backoff_base_s * 2**n`, scaled by a
-  random factor in [0.5, 1.5), up to `max_retries`). Provider SDK retries are disabled so
+- **Retries:** rate limits, 5xx from Anthropic (including 529 overloaded) or Ollama, timeouts,
+  failed connections and connections dropped mid-response are retried with jittered
+  exponential backoff (`backoff_base_s * 2**n`, scaled by a random factor in [0.5, 1.5), up
+  to `max_retries`). Provider SDK retries are disabled so
   attempts are not multiplied. `timeout_s` bounds the whole call, retries and repair included.
 - **Errors:** retries exhausted, provider API errors, timeouts, invalid output and a missing
   API key all raise `convintel.errors.LLMError`. Other exceptions are bugs and propagate.
