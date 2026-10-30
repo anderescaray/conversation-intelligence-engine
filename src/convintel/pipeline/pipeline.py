@@ -85,15 +85,19 @@ class Pipeline:
         """Warm every operator, resolve τ and compile the graph. Raising aborts startup.
 
         The warmups run concurrently: they load independent models (or only check config),
-        so startup takes the slowest one instead of their sum. Any failure propagates and the
-        graph stays uncompiled, so ``analyze()`` keeps refusing to run.
+        so startup takes the slowest one instead of their sum. They run in a TaskGroup: the
+        first failure cancels the others, and every warmup that has already failed by then is
+        reported together in one ExceptionGroup, so a broken deploy shows all its problems at
+        once. Cancellation only stops waiting: work already handed to ``asyncio.to_thread``
+        (model loading, the warmup inference) cannot be interrupted and runs to completion in
+        its thread. On any failure the graph stays uncompiled, so ``analyze()`` keeps
+        refusing to run.
         """
-        await asyncio.gather(
-            self._redactor.warmup(),
-            self._sentiment.warmup(),
-            self._summary.warmup(),
-            self._intent.warmup(),
-        )
+        async with asyncio.TaskGroup() as warmups:
+            warmups.create_task(self._redactor.warmup())
+            warmups.create_task(self._sentiment.warmup())
+            warmups.create_task(self._summary.warmup())
+            warmups.create_task(self._intent.warmup())
         # `is not None`, not `or`: an override of 0.0 ("never verify") is a valid value.
         threshold = (
             self._threshold_override
