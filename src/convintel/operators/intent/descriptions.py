@@ -29,8 +29,10 @@ from typing import Literal, get_args
 DescriptionsVersion = Literal[1, 2, 3]
 DESCRIPTIONS_VERSIONS: tuple[DescriptionsVersion, ...] = get_args(DescriptionsVersion)
 
-# Source of the label names, pinned as on the T06 branch. The classifier trains on the MTEB
-# parquet copy of the same split (training/intent/data.py), whose 77 names are identical.
+# The Banking77 revision these descriptions were audited against: the one pinned by the T06
+# taxonomy (scripts/synth/taxonomy.py on lane-f/T06-synthetic-data). It is NOT the revision the
+# classifier trains on (training/intent/data.py: mteb/banking77 at 18072d2685ea...). Both pins
+# are kept on purpose until the human decides which one is canonical; see PR #32.
 BANKING77_REPO = "PolyAI/banking77"
 BANKING77_REVISION = "796a4623935746f71378f0ebd435635a8ce08e50"
 
