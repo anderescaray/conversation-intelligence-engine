@@ -15,6 +15,7 @@ _ENV_VARS = (
     "GOOGLE_API_KEY",
     "OPENAI_API_KEY",
     "OLLAMA_BASE_URL",
+    "INTENT_VERIFIER_THRESHOLD",
 )
 
 
@@ -57,10 +58,12 @@ def test_empty_values_count_as_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("TWILIO_ACCOUNT_SID", "")
     monkeypatch.setenv("LLM_MODEL", "")
+    monkeypatch.setenv("INTENT_VERIFIER_THRESHOLD", "")
     settings = _settings()
     assert settings.anthropic_api_key is None
     assert settings.twilio_account_sid is None
     assert settings.llm_model == "claude-haiku-4-5"
+    assert settings.intent_verifier_threshold is None
 
 
 def test_settings_are_frozen() -> None:
@@ -91,3 +94,25 @@ def test_rejects_unknown_provider(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_get_settings_is_cached() -> None:
     assert get_settings() is get_settings()
+
+
+def test_intent_verifier_threshold_defaults_to_none() -> None:
+    # None means "use the tau calibrated in the model bundle".
+    assert _settings().intent_verifier_threshold is None
+
+
+@pytest.mark.parametrize("raw", ["0", "0.9", "1"])
+def test_reads_intent_verifier_threshold(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    # 0 turns the verifier off and 1 sends (almost) everything to it: both are valid policies.
+    monkeypatch.setenv("INTENT_VERIFIER_THRESHOLD", raw)
+    assert _settings().intent_verifier_threshold == float(raw)
+
+
+@pytest.mark.parametrize("raw", ["86", "-0.1", "1.01"])
+def test_rejects_out_of_range_intent_verifier_threshold(
+    monkeypatch: pytest.MonkeyPatch, raw: str
+) -> None:
+    # "86" is the realistic mistake: a percentage instead of a probability.
+    monkeypatch.setenv("INTENT_VERIFIER_THRESHOLD", raw)
+    with pytest.raises(ValidationError, match="intent_verifier_threshold"):
+        _settings()
