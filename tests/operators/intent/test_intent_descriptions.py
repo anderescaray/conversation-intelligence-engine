@@ -8,6 +8,8 @@ from typing import Any, cast
 import pytest
 
 from convintel.operators.intent.descriptions import (
+    AUDITED_AGAINST_REPO,
+    AUDITED_AGAINST_REVISION,
     DESCRIPTIONS_VERSIONS,
     DescriptionsVersion,
     intent_descriptions,
@@ -43,6 +45,13 @@ def test_every_version_has_the_same_77_labels_in_the_same_order() -> None:
     assert len(v1) == len(set(v1)) == 77
     for version in DESCRIPTIONS_VERSIONS:
         assert list(intent_descriptions(version)) == v1
+
+
+def test_provenance_records_the_revision_the_descriptions_were_audited_against() -> None:
+    # The T06 pin, kept as provenance. The classifier's dataset pin lives in
+    # training/intent/data.py and is a different repo and revision.
+    assert AUDITED_AGAINST_REPO == "PolyAI/banking77"
+    assert AUDITED_AGAINST_REVISION == "796a4623935746f71378f0ebd435635a8ce08e50"
 
 
 def test_labels_keep_the_exact_banking77_names() -> None:

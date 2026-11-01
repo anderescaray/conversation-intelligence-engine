@@ -29,12 +29,13 @@ from typing import Literal, get_args
 DescriptionsVersion = Literal[1, 2, 3]
 DESCRIPTIONS_VERSIONS: tuple[DescriptionsVersion, ...] = get_args(DescriptionsVersion)
 
-# The Banking77 revision these descriptions were audited against: the one pinned by the T06
-# taxonomy (scripts/synth/taxonomy.py on lane-f/T06-synthetic-data). It is NOT the revision the
-# classifier trains on (training/intent/data.py: mteb/banking77 at 18072d2685ea...). Both pins
-# are kept on purpose until the human decides which one is canonical; see PR #32.
-BANKING77_REPO = "PolyAI/banking77"
-BANKING77_REVISION = "796a4623935746f71378f0ebd435635a8ce08e50"
+# Provenance, not a dataset pin: the Banking77 repo and revision whose label names and train
+# examples these descriptions were audited against (as pinned by the T06 taxonomy). The
+# product's Banking77 is the classifier's, pinned in training/intent/data.py
+# (mteb/banking77@18072d2685ea...); never load data from these constants. A revision without its
+# repo is ambiguous, and the two pins live in different repos.
+AUDITED_AGAINST_REPO = "PolyAI/banking77"
+AUDITED_AGAINST_REVISION = "796a4623935746f71378f0ebd435635a8ce08e50"
 
 _V1: dict[str, str] = {
     "activate_my_card": "Activating a newly received bank card so it can be used.",

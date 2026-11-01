@@ -54,6 +54,10 @@ descriptions = intent_descriptions(3)  # read-only Mapping[label, description]
   against Banking77 train examples, v3 is v2 with only `extra_charge_on_statement` and
   `card_payment_not_recognised` changed, and is the one the verifier uses.
 - Pure data, no torch or transformers import (tested), so it is safe in any process.
+- `AUDITED_AGAINST_REPO` / `AUDITED_AGAINST_REVISION` record **provenance**: the Banking77 revision
+  the descriptions were audited against (`PolyAI/banking77@796a462`, T06's pin). They are not the
+  dataset to use. The product's Banking77 is the classifier's, pinned in
+  [`training/intent/data.py`](../../../../training/intent/data.py) (`mteb/banking77@18072d2`).
 
 ## Model resolution
 
