@@ -15,6 +15,7 @@ app = create_app(
 
 | Route | Purpose | Responses |
 |---|---|---|
+| `POST /v1/conversations` | `Conversation` in, `ConversationInsights` out. No turns + `audio_uri` → transcribed first. | 200, 413 body or audio too large, 422 audio rejected / invalid body, 5xx |
 | `GET /healthz` | Liveness. | 200 |
 | `GET /readyz` | 200 only after `pipeline.warmup()` succeeded. | 200 / 503 |
 | `GET /metrics` | Prometheus text, default registry (`convintel.telemetry` metrics). | 200 |
@@ -43,6 +44,12 @@ app = create_app(
   checked on the resolved path and the file is opened afterwards; a writer able to swap a file
   for a symlink between those two steps could redirect the read. That race is not defended in
   code: the deployment (T13) must keep the spool private to the API.
+- **Body size**: `POST /v1/conversations` bodies over `MAX_CONVERSATION_BYTES` (1 MiB) get 413
+  `Request body too large.` before any JSON parsing (declared `Content-Length` or streamed bytes).
+- **Redaction cannot be skipped from outside**: every conversation reaches the pipeline with
+  `redacted=False`, whatever the client, Twilio payload or transcriber set. The pipeline (T10)
+  must still redact unconditionally and not branch on the flag; this API guard is only the
+  first line.
 - **No conversation text out of band**: error bodies are fixed strings (validation errors return
   only `loc` and `type`), logs carry exception type names only, spans `api.*` carry
   `conversation.id`, `channel` and `error.type`.
