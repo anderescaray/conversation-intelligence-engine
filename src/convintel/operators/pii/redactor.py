@@ -15,8 +15,6 @@ from convintel.errors import OperatorError
 
 from .engine import DEFAULT_SPACY_MODEL, SUPPORTED_ENTITIES, get_analyzer
 
-_tracer = trace.get_tracer(__name__)
-
 _inference_lock = threading.Lock()
 """Serializes analysis across worker threads.
 
@@ -59,21 +57,22 @@ class PIIRedactor:
         return f"presidio/{self._spacy_model}"
 
     async def run(self, conversation: Conversation) -> OperatorResult[PIIOutput]:
+        # The caller opens the span with traced() and records latency and errors once; the
+        # operator only annotates the current span (a no-op when there is none).
         start = time.perf_counter()
-        with _tracer.start_as_current_span(f"operator.{self.name}") as span:
-            span.set_attribute("conversation.id", conversation.id)
-            span.set_attribute("operator.version", self.version)
-            span.set_attribute("model.id", self.model_id)
-            try:
-                output = await asyncio.to_thread(self._redact, conversation)
-            except OperatorError:
-                raise
-            except Exception as exc:
-                # Third-party messages can quote the input, which is raw PII here. Keep only
-                # the type, and cut the chain: span exception events format the whole
-                # traceback, causes included.
-                raise OperatorError(self.name, f"redaction failed ({type(exc).__name__})") from None
-            span.set_attribute("pii.entity_count", len(output.entities))
+        span = trace.get_current_span()
+        span.set_attribute("conversation.id", conversation.id)
+        span.set_attribute("model.id", self.model_id)
+        try:
+            output = await asyncio.to_thread(self._redact, conversation)
+        except OperatorError:
+            raise
+        except Exception as exc:
+            # Third-party messages can quote the input, which is raw PII here. Keep only
+            # the type, and cut the chain: the caller's span may format the whole
+            # traceback, causes included.
+            raise OperatorError(self.name, f"redaction failed ({type(exc).__name__})") from None
+        span.set_attribute("pii.entity_count", len(output.entities))
 
         return OperatorResult[PIIOutput](
             operator=self.name,

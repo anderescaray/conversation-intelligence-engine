@@ -17,8 +17,6 @@ from .model import (
 )
 from .trajectory import overall_sentiment
 
-_tracer = trace.get_tracer(__name__)
-
 _inference_lock = threading.Lock()
 """Serializes inference across worker threads.
 
@@ -45,27 +43,28 @@ class SentimentOperator:
     async def run(self, conversation: Conversation) -> OperatorResult[SentimentOutput]:
         start = time.perf_counter()
         texts = [t.text for t in conversation.turns if t.speaker is Speaker.CUSTOMER]
-        with _tracer.start_as_current_span(f"operator.{self.name}") as span:
-            span.set_attribute("conversation.id", conversation.id)
-            span.set_attribute("operator.version", self.version)
-            span.set_attribute("model.id", self._model_id)
-            span.set_attribute("sentiment.customer_turns", len(texts))
-            try:
-                scores = await asyncio.to_thread(self._predict, texts)
-            except OperatorError:
-                raise
-            except Exception as exc:
-                # Any third-party message (tokenizer, torch, label mapping) can quote turn text.
-                # Keep only the type, and cut the chain: span exception events format the whole
-                # traceback, causes included. Same policy as the PII redactor.
-                raise OperatorError(
-                    self.name, f"sentiment inference failed ({type(exc).__name__})"
-                ) from None
-            output = SentimentOutput(
-                overall=overall_sentiment(scores),
-                customer_trajectory=[s.label for s in scores],
-            )
-            span.set_attribute("sentiment.overall", output.overall.value)
+        # The caller opens the span with traced() and records latency and errors once; the
+        # operator only annotates the current span (a no-op when there is none).
+        span = trace.get_current_span()
+        span.set_attribute("conversation.id", conversation.id)
+        span.set_attribute("model.id", self._model_id)
+        span.set_attribute("sentiment.customer_turns", len(texts))
+        try:
+            scores = await asyncio.to_thread(self._predict, texts)
+        except OperatorError:
+            raise
+        except Exception as exc:
+            # Any third-party message (tokenizer, torch, label mapping) can quote turn text.
+            # Keep only the type, and cut the chain: the caller's span may format the whole
+            # traceback, causes included. Same policy as the PII redactor.
+            raise OperatorError(
+                self.name, f"sentiment inference failed ({type(exc).__name__})"
+            ) from None
+        output = SentimentOutput(
+            overall=overall_sentiment(scores),
+            customer_trajectory=[s.label for s in scores],
+        )
+        span.set_attribute("sentiment.overall", output.overall.value)
 
         return OperatorResult[SentimentOutput](
             operator=self.name,
