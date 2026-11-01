@@ -1,0 +1,22 @@
+# Candidate-recall study for the T10 LLM verifier. Every key maps to VerifierStudyConfig in
+# verifier_candidates.py. Model, T and τ come from the registered bundle, not from here.
+ks: [1, 2, 3, 5, 10]
+
+# Candidate descriptions the verifier prompt would carry: taxonomy version 3 from the T06 branch,
+# pinned to a commit so the token estimate does not move when that branch does.
+taxonomy_commit: 6f19aead359078f4baaa3c1d9d3df556d041a04b   # origin/lane-f/T06-synthetic-data
+taxonomy_path: scripts/synth/taxonomy.py
+taxonomy_name: INTENT_DESCRIPTIONS_V3
+
+# Priced through convintel.llm.pricing, the same table the LLM client bills with.
+llm_provider: anthropic
+llm_model: claude-haiku-4-5
+
+# Token assumptions (no tokenizer call: estimates, stated in the report).
+tokens:
+  fixed_prompt_tokens: 350          # instructions + output schema, independent of k
+  chars_per_token: 3.5              # English prose (descriptions, utterances); conservative
+  label_chars_per_token: 2.5        # snake_case label ids split into more tokens than prose
+  per_candidate_overhead_tokens: 8  # list marker, separators, newline per candidate
+  conversation_tokens: 500          # a redacted multi-turn conversation, pipeline scenario
+  output_tokens: 50                 # JSON with the chosen label and a one-line reason
