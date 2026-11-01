@@ -98,6 +98,16 @@ p50/p95/p99 for one utterance (batch 1) and for `IntentOperator.run` on a conver
 customer turns, after warm-up, on random test utterances (used as text only). `--log-to-mlflow`
 adds `latency_<device>_<kind>_<stat>` metrics to the training run of the resolved version.
 
+## 6. Verifier candidate recall (input to T10)
+
+```bash
+uv run --group ml python -m training.intent.verifier_candidates
+```
+
+Recall@k of the champion's top-k candidates below τ (the ceiling of the LLM verifier), on test and
+validation, with a rough cost per k. Config: [`verifier_candidates.yaml`](verifier_candidates.yaml).
+Results and recommendation: [`reports/verifier-candidates.md`](reports/verifier-candidates.md).
+
 ## Results
 
 First run: `intent-classifier` v1 (`@champion`), MLflow run `11387b8681024f68a9a0b2df15377965`,
