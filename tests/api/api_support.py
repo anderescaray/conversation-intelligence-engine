@@ -8,6 +8,9 @@ from convintel.contracts import Channel, Conversation, ConversationInsights, Spe
 
 TOKEN = "synthetic-test-token"
 ACCOUNT = "AC" + "0" * 32
+NOW = datetime(2026, 1, 1, tzinfo=UTC)
+# Synthetic marker: every leak test checks it never shows up outside the pipeline input.
+SECRET = "synthetic-secret-sentence-4242"
 
 
 class FakePipeline:
