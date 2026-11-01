@@ -363,6 +363,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "av" },
+    { name = "fastapi" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
@@ -379,10 +380,12 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "twilio" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx2" },
     { name = "hypothesis" },
     { name = "pre-commit" },
     { name = "pyright", extra = ["nodejs"] },
@@ -406,6 +409,7 @@ ml = [
 [package.metadata]
 requires-dist = [
     { name = "av", specifier = ">=15.1,<17" },
+    { name = "fastapi", specifier = ">=0.142,<1" },
     { name = "langchain", specifier = ">=1.4.3" },
     { name = "langchain-anthropic", specifier = ">=1.7.5" },
     { name = "langchain-core", specifier = ">=1.6.6" },
@@ -422,10 +426,12 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.4" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "twilio", specifier = ">=9.8,<10" },
+    { name = "uvicorn", specifier = ">=0.54,<1" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "httpx2", specifier = ">=2.13,<3" },
     { name = "hypothesis", specifier = ">=6.168.3" },
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pyright", extras = ["nodejs"], specifier = ">=1.1.400" },
