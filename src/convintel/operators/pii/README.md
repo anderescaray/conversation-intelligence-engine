@@ -35,8 +35,16 @@ is kept, e.g. order numbers.
   in `pyproject.toml`, must match the spaCy minor version): install it with
   `uv sync --group ml`. The redactor never downloads anything; if the model is missing it raises
   `OperatorError("pii", "... run `uv sync --group ml`")`.
-- The analyzer (spaCy pipeline) is a lazy, lock-protected per-process singleton
-  (`get_analyzer`). First use takes a few seconds.
+- The analyzer (spaCy pipeline) is a lock-protected per-process singleton (`get_analyzer`).
+  Loading it takes a few seconds.
+- `await redactor.warmup()` loads the analyzer and runs one analysis on a fixed non-PII
+  sentence, off the event loop. Call it at startup (`Pipeline.warmup()` does): a missing model
+  fails startup instead of the first request, and `run()` then reuses the analyzer that was
+  checked. Span `operator.pii.warmup` (`operator.version`, `model.id`; on failure `error.type`
+  only, no exception event). Failures become
+  `OperatorError("pii", "warmup failed (<ExceptionType>)")` with no chained cause; a missing
+  model keeps its explicit message.
+  Without `warmup()`, `run()` still loads the analyzer lazily on first use.
 - Analysis runs in a worker thread (`asyncio.to_thread`) under a process-wide lock: spaCy and
   Presidio are not documented as thread-safe and every redactor shares the analyzer. One
   conversation is analyzed at a time per process, so **scale with worker processes**

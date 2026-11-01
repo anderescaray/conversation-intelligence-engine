@@ -2,11 +2,15 @@ import asyncio
 import threading
 import time
 import traceback
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from unittest.mock import MagicMock
 
 import pytest
 from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 from sentiment_fakes import (
     NEG,
     NEU,
@@ -23,6 +27,16 @@ from convintel.operators.sentiment import operator as operator_module
 from convintel.operators.sentiment.model import LabelMappingError
 
 C, A = Speaker.CUSTOMER, Speaker.AGENT
+
+
+@pytest.fixture
+def spans(monkeypatch: pytest.MonkeyPatch) -> Iterator[InMemorySpanExporter]:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(trace, "get_tracer", provider.get_tracer)
+    yield exporter
+    provider.shutdown()
 
 
 async def test_scores_customer_turns_in_one_batch() -> None:
@@ -190,3 +204,56 @@ async def test_concurrent_runs_are_serialized() -> None:
 
     assert len(model.batches) == 6
     assert Slow.peak == 1
+
+
+async def test_warmup_loads_the_model_once_and_run_reuses_it(
+    monkeypatch: pytest.MonkeyPatch, spans: InMemorySpanExporter
+) -> None:
+    warmup_text = operator_module._WARMUP_TEXT  # pyright: ignore[reportPrivateUsage]
+    fake = FakeSentimentModel({warmup_text: NEU, "hi": POS})
+    requested: list[str] = []
+
+    def load_once(model_id: str) -> FakeSentimentModel:
+        requested.append(model_id)
+        return fake
+
+    def never_load(model_id: str) -> FakeSentimentModel:
+        raise AssertionError("run() after warmup() must reuse the warmed model")
+
+    monkeypatch.setattr(operator_module, "get_sentiment_model", load_once)
+    operator = SentimentOperator()
+
+    await operator.warmup()
+    monkeypatch.setattr(operator_module, "get_sentiment_model", never_load)
+    result = await operator.run(make_conversation((C, "hi")))
+
+    assert requested == [DEFAULT_MODEL_ID]
+    assert fake.batches == [[warmup_text], ["hi"]]
+    assert threading.get_ident() not in fake.threads
+    assert result.output.overall is Sentiment.POSITIVE
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.sentiment.warmup"]
+    attributes = span.attributes or {}
+    assert attributes["model.id"] == DEFAULT_MODEL_ID
+    assert attributes["operator.version"] == operator.version
+    assert span.status.status_code is not StatusCode.ERROR
+
+
+@pytest.mark.parametrize("error", [OSError("model not found"), LabelMappingError("LABEL_0")])
+async def test_warmup_failure_raises_operator_error_and_marks_the_span(
+    error: Exception, monkeypatch: pytest.MonkeyPatch, spans: InMemorySpanExporter
+) -> None:
+    def fail(model_id: str) -> FakeSentimentModel:
+        raise error
+
+    monkeypatch.setattr(operator_module, "get_sentiment_model", fail)
+
+    with pytest.raises(OperatorError) as excinfo:
+        await SentimentOperator().warmup()
+
+    assert excinfo.value.operator == "sentiment"
+    assert excinfo.value.message == f"warmup failed ({type(error).__name__})"
+    assert excinfo.value.__cause__ is None
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.sentiment.warmup"]
+    assert span.status.status_code is StatusCode.ERROR
+    assert (span.attributes or {})["error.type"] == "OperatorError"
+    assert not span.events

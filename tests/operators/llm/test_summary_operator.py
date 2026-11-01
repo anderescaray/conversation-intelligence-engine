@@ -4,6 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from opentelemetry import trace
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 from pydantic import SecretStr
 
 from convintel.config import Settings
@@ -93,7 +95,7 @@ async def test_conversation_is_sent_inside_delimiters() -> None:
 
 async def test_run_annotates_the_callers_span() -> None:
     # The pipeline opens operator.summary with traced(); a span opened inside run() would
-    # double-count latency and errors, and these attributes would land on it instead.
+    # duplicate it, and these attributes would land on the inner span instead.
     operator, _ = _operator(
         tool_answer(SummaryOutput, _SUMMARY, input_tokens=400, output_tokens=60)
     )
@@ -119,3 +121,43 @@ async def test_llm_failure_becomes_operator_error() -> None:
     with pytest.raises(OperatorError) as info:
         await operator.run(_CONVERSATION)
     assert info.value.operator == "summary"
+
+
+async def test_warmup_accepts_a_valid_config_without_calling_the_llm(
+    spans: InMemorySpanExporter,
+) -> None:
+    operator, model = _operator()
+
+    await operator.warmup()
+
+    assert model.calls == []
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.summary.warmup"]
+    attributes = span.attributes or {}
+    assert attributes["model.id"] == "anthropic:claude-haiku-4-5"
+    assert attributes["prompt.version"] == "summary/v1"
+    assert span.status.status_code is not StatusCode.ERROR
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({}, "ANTHROPIC_API_KEY is not set"),
+        ({"llm_provider": "google"}, "not wired up"),
+    ],
+)
+async def test_warmup_fails_on_a_bad_llm_config_and_marks_the_span(
+    overrides: dict[str, Any], message: str, spans: InMemorySpanExporter
+) -> None:
+    # Built here, not in the parametrize list: collection runs before _isolated_env clears
+    # the shell's LLM variables.
+    settings = Settings(_env_file=None, **overrides)  # pyright: ignore[reportCallIssue]
+    operator = SummaryOperator(client=LLMClient(settings))
+
+    with pytest.raises(OperatorError, match=message) as info:
+        await operator.warmup()
+
+    assert info.value.operator == "summary"
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.summary.warmup"]
+    assert span.status.status_code is StatusCode.ERROR
+    assert (span.attributes or {})["error.type"] == "OperatorError"
+    assert not span.events
