@@ -19,6 +19,7 @@ from convintel.api.errors import ServiceNotConfiguredError
 from convintel.api.middleware import RequestMetricsMiddleware, api_span
 from convintel.api.protocols import Pipeline, RecordingFetcher
 from convintel.api.routes import router
+from convintel.api.twilio import router as twilio_router
 from convintel.config import Settings
 from convintel.contracts import Transcriber
 from convintel.telemetry import setup
@@ -83,6 +84,7 @@ def create_app(
     errors.install(app)
     app.add_middleware(RequestMetricsMiddleware, excluded_routes=PROBE_ROUTES)
     app.include_router(router)
+    app.include_router(twilio_router)
     return app
 
 
