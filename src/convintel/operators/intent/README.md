@@ -35,6 +35,30 @@ several turns is optimistically biased (selection effect), more so the more cust
 conversation has. τ was chosen per utterance on Banking77 validation; it must be **re-tuned at
 conversation level on the T06 golden set** before the pipeline routes on it.
 
+## Intent descriptions
+
+`descriptions.py` holds one operational description per Banking77 label, shared by the LLM
+intent verifier (T10) and the synthetic-data generator, judge and labeling guide (T06). The
+golden set was labeled against these definitions and will evaluate the verifier, so both read
+them from here.
+
+```python
+from convintel.operators.intent.descriptions import intent_descriptions
+
+descriptions = intent_descriptions(3)  # read-only Mapping[label, description]
+```
+
+- Versions are **immutable**, like prompts (ADR-0004): a new wording is a new version, never an
+  edit. A test pins a sha256 of every version.
+- There is **no default version**: every caller pins one. v1 is the original wording, v2 the audit
+  against Banking77 train examples, v3 is v2 with only `extra_charge_on_statement` and
+  `card_payment_not_recognised` changed, and is the one the verifier uses.
+- Pure data, no torch or transformers import (tested), so it is safe in any process.
+- `AUDITED_AGAINST_REPO` / `AUDITED_AGAINST_REVISION` record **provenance**: the Banking77 revision
+  the descriptions were audited against (`PolyAI/banking77@796a462`, T06's pin). They are not the
+  dataset to use. The product's Banking77 is the classifier's, pinned in
+  [`training/intent/data.py`](../../../../training/intent/data.py) (`mteb/banking77@18072d2`).
+
 ## Model resolution
 
 `model_uri` accepts:
@@ -84,6 +108,8 @@ conversation level on the T06 golden set** before the pipeline routes on it.
 
 ## Tests
 
+- Descriptions: same 77 labels in every version, frozen fingerprints, v3 vs v2 diff, read-only
+  mapping, no torch import.
 - Unit: `FakeIntentModel` (canned logits, no torch, no network); calibration, threshold study,
   registry resolution with a fake MLflow, sanitized errors, spans, warmup, lock.
 - `test_intent_hf.py`: real transformers adapter on a tiny random DistilBERT built in the test
