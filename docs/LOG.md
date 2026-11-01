@@ -42,3 +42,43 @@ Dated notes: decisions, agent behaviour, surprises, numbers. Feeds the README's 
   mutation's prediction and result in the commit body, and post their final report as a PR
   comment; the reviewer posts its review on the PR. Only squash merges are allowed now.
 - Next: integration test with real models (`-m integration`), then the LLM intent verifier.
+
+## 2026-11-01
+- **T12 part 1 merged as a 4-PR stack (#27-#30).** The ~1,900-line branch was split by topic
+  (spool, app and lifespan, conversations endpoint, Twilio webhooks) with no behaviour change.
+  Proof: the diff between the top of the stack and the original branch is empty, and each branch
+  passes on its own with `uv run --exact`. Four independent reviews, all "approve with nits"
+  (#31). The most useful finding: the audio duration check used `duration > max`, which lets NaN
+  through because every comparison with NaN is false.
+- **T10 pipeline merged without the LLM verifier, as a 5-PR stack (#36-#40).** It was the first
+  independent review of this code. The only content change allowed in the split was the task
+  brief, brought in line with what was built. Two acceptance items it still lists are not met yet
+  (effective τ on a span, a graph-level parallelism test); they stay in the brief and move to the
+  verifier PR (#41) instead of rewriting the brief to match the code.
+- **End-to-end integration test** with real models and the production summary path
+  (claude-haiku-4-5): `analyze()` takes 2.1-2.6 s, almost all of it the summary call; local
+  operators stay under 0.3 s; about $0.002 per conversation. A second test plants synthetic PII
+  and asserts that no value reaches any exported span with the production instrumentation on. It
+  also asserts that redacted placeholders do appear, so it cannot pass vacuously. Mutation: feeding
+  the unredacted conversation into the graph leaks 6 values and fails the test.
+- **Warmup:** `asyncio.TaskGroup` instead of `gather`, so every failed warmup is reported, plus an
+  overall `asyncio.timeout`, so a hung model load fails startup instead of leaving the service up
+  and never ready.
+- **Intent descriptions shared and versioned (#32).** One read-only module, no default version,
+  sha256 fingerprints per version. Making it shared exposed that the classifier trains on
+  `mteb/banking77@18072d2` while the descriptions were audited against `PolyAI/banking77@796a462`.
+  The constants were renamed to `AUDITED_AGAINST_*` (provenance, not a dataset pin); an equivalence
+  check over sorted (text, label) pairs is pending.
+- **Verifier candidates measured before writing the verifier (#33).** The verifier only chooses
+  among the classifier's top-k, so recall@k on low-confidence cases bounds what it can fix. On the
+  Banking77 test split, 12.5 % of examples fall below τ and the classifier gets 57.2 % of them right.
+  On the ones it gets wrong, the correct label is in the top-3 65.9 % of the time and in the top-5
+  82.3 %. Decision: k = 5, and "none of these" maps to `unknown`. Cost is not a factor: about
+  $0.16 per 1,000 conversations. These are single utterances, so the numbers are optimistic for
+  conversations and will be re-measured on the golden set.
+- **Process:** large PRs are split into stacks by an agent and reviewed one PR per reviewer
+  session; stacks are merged bottom-up with squash, `rebase --onto` with `--update-refs`, and
+  `push --force-with-lease --atomic`, driven by a script that stops before any push if the content
+  changed.
+- Next: wire `build_pipeline(settings)` into the API lifespan (end-to-end service), then the LLM
+  intent verifier behind an evaluation gate.
