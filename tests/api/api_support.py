@@ -1,6 +1,10 @@
 """Fakes and helpers shared by the API tests. All content is synthetic."""
 
+import base64
+import hashlib
+import hmac
 import wave
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -53,6 +57,16 @@ class FakeTranscriber:
         )
 
 
+class FakeFetcher:
+    def __init__(self, target: Callable[[Path], Path]) -> None:
+        self.target = target
+        self.calls = 0
+
+    async def fetch(self, recording: Conversation, spool_dir: Path) -> Path:
+        self.calls += 1
+        return self.target(spool_dir)
+
+
 def write_wav(path: Path, seconds: float = 0.5, channels: int = 1, rate: int = 8000) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as out:
@@ -61,3 +75,10 @@ def write_wav(path: Path, seconds: float = 0.5, channels: int = 1, rate: int = 8
         out.setframerate(rate)
         out.writeframes(b"\x00\x00" * channels * int(seconds * rate))
     return path
+
+
+def sign(url: str, params: dict[str, str], token: str = TOKEN) -> str:
+    message = url + "".join(key + params[key] for key in sorted(params))
+    return base64.b64encode(
+        hmac.new(token.encode(), message.encode(), hashlib.sha1).digest()
+    ).decode()
