@@ -1,8 +1,12 @@
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from api_support import write_wav
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from convintel.api.audio import AudioSpool, sweep_spool
 
@@ -66,3 +70,16 @@ def test_sweep_never_follows_or_deletes_symlinks(spool_dir: Path, tmp_path: Path
 
 def test_sweep_of_a_missing_spool_is_a_no_op(tmp_path: Path) -> None:
     assert sweep_spool(AudioSpool(tmp_path / "missing"), TTL) == 0
+
+
+def test_startup_sweeps_the_spool(
+    make_app: Callable[..., FastAPI], spool_dir: Path, spans: InMemorySpanExporter
+) -> None:
+    old = age(write_wav(spool_dir / "old.wav"), TTL + 1)
+    fresh = write_wav(spool_dir / "fresh.wav")
+    with TestClient(make_app(spool_ttl_s=TTL)):
+        pass
+    assert not old.exists()
+    assert fresh.exists()
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "api.spool.sweep"]
+    assert dict(span.attributes or {}) == {"files.removed": 1}
