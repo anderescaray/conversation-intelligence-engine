@@ -133,6 +133,8 @@ one process with `tests/telemetry/test_setup.py` (e.g. `-m ""`), which would the
 own spans. The same constraint applies to `tests/pipeline/test_pipeline_integration.py`, which
 attaches its in-memory exporter to whichever provider is already installed.
 
-The lifespan sweeps the default spool, `var/spool/audio` relative to the working directory, and
-deletes files older than 24 h. Never run the test from a checkout whose `var/spool/audio` holds
-real audio (until the spool path is a setting, #27).
+The lifespan sweeps the app's spool at startup and deletes files older than 24 h; the production
+default, `var/spool/audio` under the working directory, may hold real audio. The test points the
+app at a spool under `tmp_path` (`isolate_spool` in `tests/api/api_support.py`) before the
+lifespan runs, and a unit test proves the sweep stays there. The long-term fix is a human-owned
+spool path setting that `create_production_app()` passes to `create_app` (#27).

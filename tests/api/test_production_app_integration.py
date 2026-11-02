@@ -7,9 +7,11 @@ manager, so the lifespan runs the real telemetry setup and the real warmups. Nee
 default) once per run, a fraction of a cent. Every name, number and address below is
 fictitious (the same values as `tests/pipeline/test_pipeline_integration.py`).
 
-The lifespan sweeps the default spool (`var/spool/audio`, relative to the working directory)
-and deletes files older than 24 h, as production does: never run this test from a checkout
-whose `var/spool/audio` holds real audio. Known risk until the spool path is a setting (#27).
+The lifespan sweeps the app's spool at startup, deleting files older than 24 h. The production
+default is `var/spool/audio` under the working directory, which may hold real audio, so the
+test points the app at a spool under `tmp_path` (`isolate_spool`) before the lifespan runs; a
+unit test in `test_production_app.py` proves the sweep then stays there. The long-term fix is a
+human-owned spool path setting passed by the factory (#27).
 
 The lifespan calls the production `telemetry.setup()`, which installs the process-wide tracer
 provider (OTLP to Phoenix); OpenTelemetry allows that only once per process and `setup()` is
@@ -20,8 +22,10 @@ if this test ran first, `test_setup.py` would not see its own spans.
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
+from api_support import isolate_spool
 from fastapi.testclient import TestClient
 
 from convintel.api.main import create_production_app
@@ -72,13 +76,16 @@ def no_network() -> None:
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def client(tmp_path: Path) -> Iterator[TestClient]:
     for module in ("torch", "transformers", "mlflow", "en_core_web_lg"):
         pytest.importorskip(module)
     # The real Settings (env and .env), read fresh rather than from an earlier test's cache.
     get_settings.cache_clear()
     try:
-        with TestClient(create_production_app()) as test_client:
+        app = create_production_app()
+        # Before the lifespan: its startup sweep must never touch the default spool.
+        isolate_spool(app, tmp_path / "spool")
+        with TestClient(app) as test_client:
             yield test_client
     finally:
         get_settings.cache_clear()
