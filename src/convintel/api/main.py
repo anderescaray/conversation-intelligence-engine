@@ -20,8 +20,9 @@ from convintel.api.middleware import RequestMetricsMiddleware, api_span
 from convintel.api.protocols import Pipeline, RecordingFetcher
 from convintel.api.routes import router
 from convintel.api.twilio import router as twilio_router
-from convintel.config import Settings
+from convintel.config import Settings, get_settings
 from convintel.contracts import Transcriber
+from convintel.pipeline.factory import build_pipeline
 from convintel.telemetry import setup
 from convintel.transcription.whisper import WhisperTranscriber
 
@@ -88,5 +89,12 @@ def create_app(
     return app
 
 
-# No pipeline on main yet (T10): serving this instance fails at startup until it is wired here.
-app = create_app()
+def create_production_app() -> FastAPI:
+    """The app uvicorn serves: `uvicorn convintel.api.main:create_production_app --factory`.
+
+    This is the composition root, the only place that knows the concrete pipeline. Settings
+    are read here, when the server starts, not when the module is imported: importing the API
+    (tests, tooling) has no side effects, and a bad config fails the deploy, where it belongs.
+    """
+    settings = get_settings()
+    return create_app(pipeline=build_pipeline(settings), settings=settings)
