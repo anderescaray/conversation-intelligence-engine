@@ -116,3 +116,23 @@ def test_rejects_out_of_range_intent_verifier_threshold(
     monkeypatch.setenv("INTENT_VERIFIER_THRESHOLD", raw)
     with pytest.raises(ValidationError, match="intent_verifier_threshold"):
         _settings()
+
+
+def test_pipeline_warmup_timeout_defaults_to_300_seconds() -> None:
+    # Same value as the old constant in pipeline.py: making it configurable changes no behaviour.
+    assert _settings().pipeline_warmup_timeout_s == 300.0
+
+
+def test_reads_pipeline_warmup_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PIPELINE_WARMUP_TIMEOUT_S", "120")
+    assert _settings().pipeline_warmup_timeout_s == 120.0
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "nan", "inf"])
+def test_rejects_invalid_pipeline_warmup_timeout(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    # 0 or less would fail every startup; "inf" would silently disable the timeout and is the
+    # case only `allow_inf_nan=False` catches (verified by mutation). Pydantic's `gt=0` already
+    # rejects "nan"; that case guards the behaviour if the validation changes.
+    monkeypatch.setenv("PIPELINE_WARMUP_TIMEOUT_S", raw)
+    with pytest.raises(ValidationError, match="pipeline_warmup_timeout_s"):
+        _settings()

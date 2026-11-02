@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # Pipeline policy
     intent_verifier_threshold: float | None = Field(default=None, ge=0, le=1)
 
+    # Upper bound for all model warmups together at startup. A hung load must fail the
+    # deploy instead of leaving the service up but never ready. Keep it below the platform's
+    # startup probe (Cloud Run) so the error is ours, with context, not a killed container.
+    pipeline_warmup_timeout_s: float = Field(default=300.0, gt=0, allow_inf_nan=False)
+
 
 @lru_cache
 def get_settings() -> Settings:
