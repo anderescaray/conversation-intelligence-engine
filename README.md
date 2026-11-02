@@ -35,7 +35,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram, telemet
 ```bash
 uv sync
 docker compose -f infra/docker-compose.yml up -d
-uv run uvicorn convintel.api.main:app --reload
+uv run uvicorn convintel.api.main:create_production_app --factory --reload
 ```
 
 ### Local GPU (optional)

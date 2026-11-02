@@ -1,7 +1,15 @@
 # convintel.api
 
-FastAPI service (T12 part 1, no persistence). Build the app with `create_app(...)`; the
-module-level `convintel.api.main:app` refuses to start until a pipeline is wired in (T10).
+FastAPI service (T12 part 1, no persistence). In production, `create_production_app()` is the
+composition root: it reads `Settings` and builds the real pipeline (T10) when the server starts.
+Serve it with uvicorn's `--factory`:
+
+```bash
+uv run uvicorn convintel.api.main:create_production_app --factory
+```
+
+There is no module-level app: importing `convintel.api` has no side effects. Tests and custom
+wiring build the app with `create_app(...)` and inject their own seams:
 
 ```python
 from convintel.api import create_app

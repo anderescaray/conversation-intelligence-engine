@@ -13,8 +13,10 @@ Twilio callbacks, which ignore response bodies).
 `src/convintel/api/`, `tests/api/`, `docs/tasks/T12-api.md`, `pyproject.toml`, `uv.lock`
 
 ## Requirements
-- `convintel.api.main:create_app(...)` builds the FastAPI app; `convintel.api.main:app` is the
-  module-level instance used by `uvicorn`.
+- `convintel.api.main:create_app(...)` builds the FastAPI app. `uvicorn` serves
+  `convintel.api.main:create_production_app` with `--factory` (the composition root that builds
+  the real pipeline from `Settings`); there is no module-level instance, so importing the API
+  has no side effects.
 - The pipeline (T10, not on `main` yet) is consumed through a `Pipeline` Protocol defined in
   `convintel.api` (`async def analyze(conversation) -> ConversationInsights`,
   `async def warmup() -> None`), injected through FastAPI dependencies. No
