@@ -26,6 +26,9 @@ app = create_app(
 
 - `Pipeline`: `async analyze(conversation) -> ConversationInsights`, `async warmup()`.
   Warmup runs in the lifespan, after `telemetry.setup()`; if it raises, startup fails.
+  Each failure is logged as `"<operator>:<ErrorType>"` (members of the pipeline's
+  `ExceptionGroup` one by one; `PipelineError` uses its stage, e.g.
+  `"warmup_timeout:PipelineError"`; anything else by type name), never with its message.
 - `RecordingFetcher`: `async fetch(recording, spool_dir) -> Path`. No implementation ships yet,
   so the recording webhook answers 503 to correctly signed requests until one is passed to
   `create_app`. The returned file is deleted after transcription (see spool lifecycle), so

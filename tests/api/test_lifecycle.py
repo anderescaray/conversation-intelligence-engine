@@ -1,13 +1,15 @@
+import logging
 from collections.abc import AsyncIterator, Callable
 
 import pytest
-from api_support import FakePipeline
+from api_support import SECRET, FakePipeline
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from prometheus_client import REGISTRY
 
 from convintel.api.errors import ServiceNotConfiguredError
+from convintel.errors import OperatorError, PipelineError
 
 
 def requests(route: str, status: str) -> float:
@@ -54,6 +56,51 @@ def test_startup_fails_when_warmup_fails(
     with pytest.raises(RuntimeError), TestClient(app):
         pass
     assert app.state.convintel.ready is False
+
+
+@pytest.mark.parametrize(
+    ("error", "labels"),
+    [
+        (
+            ExceptionGroup(
+                "warmups failed",
+                [
+                    OperatorError("sentiment", f"model missing near {SECRET}"),
+                    ExceptionGroup("nested", [OperatorError("intent", SECRET)]),
+                    RuntimeError(SECRET),
+                ],
+            ),
+            ["sentiment:OperatorError", "intent:OperatorError", "RuntimeError"],
+        ),
+        (PipelineError("warmup_timeout"), ["warmup_timeout:PipelineError"]),
+        (RuntimeError(SECRET), ["RuntimeError"]),
+    ],
+    ids=["group", "pipeline-error", "plain"],
+)
+def test_a_failed_warmup_logs_which_one_failed(
+    make_app: Callable[..., FastAPI],
+    pipeline: FakePipeline,
+    caplog: pytest.LogCaptureFixture,
+    error: Exception,
+    labels: list[str],
+) -> None:
+    pipeline.warmup_error = error
+    app = make_app()
+
+    # Startup still aborts with the original exception, group included.
+    with (
+        caplog.at_level(logging.ERROR, logger="convintel.api.main"),
+        pytest.raises(type(error)) as excinfo,
+        TestClient(app),
+    ):
+        pass
+
+    assert excinfo.value is error
+    assert app.state.convintel.ready is False
+    records = [r for r in caplog.records if r.name == "convintel.api.main"]
+    assert [r.args for r in records] == [(label,) for label in labels]
+    # Type names only: messages can quote conversation text.
+    assert not any(SECRET in r.getMessage() for r in caplog.records)
 
 
 def test_startup_fails_without_a_pipeline(make_app: Callable[..., FastAPI]) -> None:

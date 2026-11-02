@@ -1,4 +1,4 @@
-"""FastAPI application factory and the module-level `app` served by uvicorn.
+"""FastAPI application factory and the production app served by uvicorn (`--factory`).
 
 Startup fails loudly instead of serving a half-ready process: telemetry is configured first so
 warmup is traced, then the pipeline warms up, and only then does `/readyz` report ready.
@@ -22,6 +22,7 @@ from convintel.api.routes import router
 from convintel.api.twilio import router as twilio_router
 from convintel.config import Settings, get_settings
 from convintel.contracts import Transcriber
+from convintel.errors import OperatorError, PipelineError
 from convintel.pipeline.factory import build_pipeline
 from convintel.telemetry import setup
 from convintel.transcription.whisper import WhisperTranscriber
@@ -30,6 +31,25 @@ from convintel.transcription.whisper import WhisperTranscriber
 PROBE_ROUTES = frozenset({"/healthz", "/readyz", "/metrics"})
 
 _logger = logging.getLogger(__name__)
+
+
+def warmup_failure_labels(exc: BaseException) -> list[str]:
+    """One ``"<operator>:<ErrorType>"`` label per failure inside ``exc``, groups flattened.
+
+    The pipeline warms its operators in a TaskGroup, so a failed warmup arrives as an
+    ExceptionGroup whose own type name says nothing about which operator broke. The label
+    comes from attributes our errors carry (``OperatorError.operator``,
+    ``PipelineError.stage``), never from messages, which may quote conversation text;
+    anything else is reported by its type name alone.
+    """
+    if isinstance(exc, BaseExceptionGroup):
+        group: BaseExceptionGroup[BaseException] = exc
+        return [label for member in group.exceptions for label in warmup_failure_labels(member)]
+    if isinstance(exc, OperatorError):
+        return [f"{exc.operator}:{type(exc).__name__}"]
+    if isinstance(exc, PipelineError):
+        return [f"{exc.stage}:{type(exc).__name__}"]
+    return [type(exc).__name__]
 
 
 @asynccontextmanager
@@ -45,7 +65,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
             await state.pipeline.warmup()
         except Exception as exc:
-            _logger.error("Pipeline warmup failed with %s; aborting startup", type(exc).__name__)
+            for label in warmup_failure_labels(exc):
+                _logger.error("Pipeline warmup failed with %s; aborting startup", label)
             raise
     state.ready = True
     _logger.info("Pipeline warm; ready to serve")
