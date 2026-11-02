@@ -20,6 +20,7 @@ idempotent, so whichever module calls it first owns the provider. Run this file 
 if this test ran first, `test_setup.py` would not see its own spans.
 """
 
+import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -91,16 +92,27 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         get_settings.cache_clear()
 
 
+def _planted_in(texts: list[str]) -> list[str]:
+    return sorted({value for value in PLANTED_VALUES for text in texts if value in text})
+
+
 def test_the_production_app_analyzes_a_conversation_over_http(
-    client: TestClient, capsys: pytest.CaptureFixture[str]
+    client: TestClient, caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert client.get("/readyz").status_code == 200
+    # INFO, not DEBUG: provider SDKs log request options at DEBUG, and a failing test prints
+    # every captured record.
+    caplog.set_level(logging.INFO)
 
     response = client.post("/v1/conversations", json=CONVERSATION.model_dump(mode="json"))
 
     assert response.status_code == 200, response.text
-    leaked = sorted(value for value in PLANTED_VALUES if value in response.text)
-    assert leaked == [], f"planted values in the response body: {leaked}"
+    assert _planted_in([response.text]) == [], "planted values in the response body"
+    # Formatted as a handler would emit them: message plus traceback, if any.
+    logged = [logging.Formatter().format(record) for record in caplog.records]
+    assert _planted_in(logged) == [], "planted values in the log records"
+    # Not vacuous: the HTTP client logs the request itself at INFO.
+    assert logged
     insights = ConversationInsights.model_validate_json(response.text)
     with capsys.disabled():
         print(
