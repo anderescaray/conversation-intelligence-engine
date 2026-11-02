@@ -24,7 +24,7 @@ uv run ruff check . --fix && uv run ruff format .
 uv run pyright                   # type check (strict on src/convintel/contracts)
 uv run python -m evals.run --suite smoke   # quick LLM eval (needs API key)
 docker compose -f infra/docker-compose.yml up -d   # Phoenix, Prometheus, Grafana, MLflow
-uv run uvicorn convintel.api.main:app --reload
+uv run uvicorn convintel.api.main:create_production_app --factory --reload
 ```
 
 pyright ships its own Node (`pyright[nodejs]`). On Node or `libatomic` errors, run `uv sync`;

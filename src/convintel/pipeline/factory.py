@@ -22,5 +22,6 @@ def build_pipeline(settings: Settings) -> Pipeline:
         sentiment=SentimentOperator(),
         summary=SummaryOperator(client=LLMClient(settings)),
         intent=IntentOperator(),
+        warmup_timeout_s=settings.pipeline_warmup_timeout_s,
         threshold_override=settings.intent_verifier_threshold,
     )

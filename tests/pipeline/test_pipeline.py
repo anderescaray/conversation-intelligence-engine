@@ -19,7 +19,6 @@ import convintel
 from convintel.contracts import Channel
 from convintel.contracts.schemas import SentimentOutput, SummaryOutput
 from convintel.errors import OperatorError, PipelineError
-from convintel.pipeline import pipeline as pipeline_module
 from convintel.pipeline.pipeline import Pipeline
 
 SECRET = "marisol.q@example.com"
@@ -45,7 +44,10 @@ class _Parts:
         failing_warmups: tuple[str, ...] = (),
         hanging_warmup: str | None = None,
         warmup_hook: WarmupHook | None = None,
+        warmup_timeout_s: float = 300.0,
     ) -> None:
+        self.warmup_timeout_s = warmup_timeout_s
+
         def warmup_error(name: str) -> OperatorError | None:
             return OperatorError(name, "model missing") if name in failing_warmups else None
 
@@ -84,6 +86,7 @@ class _Parts:
             sentiment=self.sentiment,
             summary=self.summary,
             intent=self.intent,
+            warmup_timeout_s=self.warmup_timeout_s,
             verify=self.verifier,
             threshold_override=threshold_override,
         )
@@ -274,9 +277,8 @@ async def test_warmups_run_concurrently() -> None:
         await pipeline.warmup()
 
 
-async def test_a_warmup_that_never_finishes_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(pipeline_module, "PIPELINE_WARMUP_TIMEOUT_S", 0.05)
-    pipeline = _Parts(hanging_warmup="sentiment").pipeline()
+async def test_a_warmup_that_never_finishes_times_out() -> None:
+    pipeline = _Parts(hanging_warmup="sentiment", warmup_timeout_s=0.05).pipeline()
 
     with pytest.raises(PipelineError, match="warmup_timeout") as excinfo:
         # Bounded on its own: if the deadline regresses, this fails instead of hanging.

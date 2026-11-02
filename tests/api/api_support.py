@@ -8,6 +8,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from fastapi import FastAPI
+
+from convintel.api.audio import AudioSpool
 from convintel.contracts import Channel, Conversation, ConversationInsights, Speaker, Turn
 
 TOKEN = "synthetic-test-token"
@@ -82,3 +85,15 @@ def sign(url: str, params: dict[str, str], token: str = TOKEN) -> str:
     return base64.b64encode(
         hmac.new(token.encode(), message.encode(), hashlib.sha1).digest()
     ).decode()
+
+
+def isolate_spool(app: FastAPI, root: Path) -> AudioSpool:
+    """Point an app built by `create_production_app()` at a spool under `root`.
+
+    The lifespan sweeps the app's spool at startup, deleting old files; the production default
+    is `var/spool/audio` under the working directory, which may hold real audio. Call this
+    before entering the `TestClient`, so the sweep (and any request) only touches `root`.
+    """
+    spool = AudioSpool(root)
+    app.state.convintel.spool = spool
+    return spool

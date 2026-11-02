@@ -13,12 +13,16 @@ Twilio callbacks, which ignore response bodies).
 `src/convintel/api/`, `tests/api/`, `docs/tasks/T12-api.md`, `pyproject.toml`, `uv.lock`
 
 ## Requirements
-- `convintel.api.main:create_app(...)` builds the FastAPI app; `convintel.api.main:app` is the
-  module-level instance used by `uvicorn`.
-- The pipeline (T10, not on `main` yet) is consumed through a `Pipeline` Protocol defined in
-  `convintel.api` (`async def analyze(conversation) -> ConversationInsights`,
-  `async def warmup() -> None`), injected through FastAPI dependencies. No
-  `src/convintel/pipeline/` in this task.
+- `convintel.api.main:create_app(...)` builds the FastAPI app. `uvicorn` serves
+  `convintel.api.main:create_production_app` with `--factory` (the composition root that builds
+  the real pipeline from `Settings`); there is no module-level instance, so importing the API
+  has no side effects.
+- The pipeline is consumed through a `Pipeline` Protocol defined in `convintel.api`
+  (`async def analyze(conversation) -> ConversationInsights`, `async def warmup() -> None`),
+  injected through `create_app(pipeline=...)` and FastAPI dependencies; tests inject fakes.
+  `create_production_app()` is the approved composition root and the only API code that imports
+  `convintel.pipeline` (`build_pipeline(settings)`, T10). `src/convintel/pipeline/` is outside
+  this lane: edit it only as a cross-lane change approved by the human.
 - `POST /v1/conversations`: body is a `Conversation`, response is `ConversationInsights`.
   A conversation with an `audio_uri` and no turns is transcribed first (through the
   `Transcriber` contract) after the spool checks below.

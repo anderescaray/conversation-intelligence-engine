@@ -1,7 +1,15 @@
 # convintel.api
 
-FastAPI service (T12 part 1, no persistence). Build the app with `create_app(...)`; the
-module-level `convintel.api.main:app` refuses to start until a pipeline is wired in (T10).
+FastAPI service (T12 part 1, no persistence). In production, `create_production_app()` is the
+composition root: it reads `Settings` and builds the real pipeline (T10) when the server starts.
+Serve it with uvicorn's `--factory`:
+
+```bash
+uv run uvicorn convintel.api.main:create_production_app --factory
+```
+
+There is no module-level app: importing `convintel.api` has no side effects. Tests and custom
+wiring build the app with `create_app(...)` and inject their own seams:
 
 ```python
 from convintel.api import create_app
@@ -26,6 +34,9 @@ app = create_app(
 
 - `Pipeline`: `async analyze(conversation) -> ConversationInsights`, `async warmup()`.
   Warmup runs in the lifespan, after `telemetry.setup()`; if it raises, startup fails.
+  Each failure is logged as `"<operator>:<ErrorType>"` (members of the pipeline's
+  `ExceptionGroup` one by one; `PipelineError` uses its stage, e.g.
+  `"warmup_timeout:PipelineError"`; anything else by type name), never with its message.
 - `RecordingFetcher`: `async fetch(recording, spool_dir) -> Path`. No implementation ships yet,
   so the recording webhook answers 503 to correctly signed requests until one is passed to
   `create_app`. The returned file is deleted after transcription (see spool lifecycle), so
@@ -91,3 +102,39 @@ template; unknown paths share `route="unmatched"`. An exception raised after the
 headers were sent (e.g. inside a streaming body) is counted as `status="500"`, whatever status
 was already sent, and re-raised so the server aborts the response; only the exception type is
 logged by the API.
+
+## Tests
+
+Unit tests (`tests/api/`, fakes for the pipeline, transcriber and fetcher, sockets blocked) run
+with `uv run pytest`.
+
+The end-to-end test, `tests/api/test_production_app_integration.py`, serves
+`create_production_app()` with the real `Settings` through a `TestClient` context manager, so
+the lifespan runs the real telemetry setup and warmups. It posts one synthetic conversation with
+planted fictitious PII to `POST /v1/conversations`, checks the insights, and checks that no
+planted value appears in the response body. It needs:
+
+- the stack up: `docker compose -f infra/docker-compose.yml up -d` (from the main checkout),
+  with MLflow serving `intent-classifier@champion` and Phoenix receiving the spans;
+- the `ml` group: `uv sync --group ml` (it skips without it);
+- `ANTHROPIC_API_KEY` in the environment or `.env` (the summary uses the `Settings` provider
+  and model, `claude-haiku-4-5` by default).
+
+```bash
+uv run pytest -m integration tests/api/test_production_app_integration.py
+```
+
+One run makes one summary call, about $0.002 (it prints the cost from the response).
+
+The lifespan runs the production `telemetry.setup()`, which sets the process-wide tracer
+provider (OTLP to Phoenix); OpenTelemetry allows that only once per process, so whichever module
+calls `setup()` first owns it. Run the test alone or with `-m integration`, as above, never in
+one process with `tests/telemetry/test_setup.py` (e.g. `-m ""`), which would then not see its
+own spans. The same constraint applies to `tests/pipeline/test_pipeline_integration.py`, which
+attaches its in-memory exporter to whichever provider is already installed.
+
+The lifespan sweeps the app's spool at startup and deletes files older than 24 h; the production
+default, `var/spool/audio` under the working directory, may hold real audio. The test points the
+app at a spool under `tmp_path` (`isolate_spool` in `tests/api/api_support.py`) before the
+lifespan runs, and a unit test proves the sweep stays there. The long-term fix is a human-owned
+spool path setting that `create_production_app()` passes to `create_app` (#27).
