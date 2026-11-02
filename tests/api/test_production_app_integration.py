@@ -41,6 +41,7 @@ NAME = "Priya Thistlewood"
 CARD = "4111 1111 1111 1111"  # published issuer test number, Luhn-valid
 EMAIL = "priya.t@example.com"
 PHONE = "415-555-0123"  # 555-01xx is reserved for fiction
+PLANTED_ENTITIES = 4
 PLANTED_VALUES = (
     NAME,
     *NAME.split(),
@@ -119,9 +120,16 @@ def test_the_production_app_analyzes_a_conversation_over_http(
             f"\nAPI integration: cost ${insights.total_cost_usd:.6f}, "
             f"analyze {insights.total_latency_ms:.0f} ms"
         )
+    # The pipeline integration test's assertions: HTTP does not change the insights contract.
     assert insights.conversation_id == CONVERSATION.id
     assert insights.errors == []
     assert insights.sentiment is not None
     assert insights.intent is not None
     assert insights.summary is not None
-    assert insights.pii_entity_count > 0
+    assert insights.intent.output.label == "lost_or_stolen_card"
+    assert insights.pii_entity_count == PLANTED_ENTITIES
+    assert insights.summary.cost_usd is not None
+    assert insights.total_cost_usd > 0
+    assert insights.total_cost_usd == insights.summary.cost_usd
+    assert insights.total_latency_ms > 0
+    assert insights.trace_id is not None
