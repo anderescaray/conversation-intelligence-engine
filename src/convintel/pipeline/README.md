@@ -24,7 +24,9 @@ It raises, and the graph stays uncompiled (so `analyze()` keeps refusing to run)
 
 - a warmup fails: an `ExceptionGroup` of the warmups that had failed when the others were
   cancelled, each an `OperatorError` carrying `.operator`;
-- all warmups together exceed `PIPELINE_WARMUP_TIMEOUT_S` (300 s): `PipelineError("warmup_timeout")`;
+- all warmups together exceed the timeout: `PipelineError("warmup_timeout")`. `Pipeline` takes
+  it as the required `warmup_timeout_s`; `build_pipeline` passes the `PIPELINE_WARMUP_TIMEOUT_S`
+  setting (300 s by default; keep it below the platform's startup probe);
 - neither `INTENT_VERIFIER_THRESHOLD` nor the model bundle provides τ:
   `PipelineError("intent_threshold")`.
 

@@ -35,10 +35,6 @@ from .state import PipelineState
 
 _tracer = trace.get_tracer(__name__)
 
-# Upper bound for all warmups together. A hung model download or load must fail startup
-# instead of leaving the service up but never ready. Generous: a cold start downloads weights.
-PIPELINE_WARMUP_TIMEOUT_S = 300.0
-
 
 class WarmableOperator[T: BaseModel](Operator[T], Protocol):
     """An operator that loads (or validates) what it needs in ``warmup()``, at startup.
@@ -72,14 +68,20 @@ class Pipeline:
         sentiment: WarmableOperator[SentimentOutput],
         summary: WarmableOperator[SummaryOutput],
         intent: IntentClassifier,
+        warmup_timeout_s: float,
         verify: VerifyFn = keep_classifier_label,
         threshold_override: float | None = None,
         version: str = convintel.__version__,
     ) -> None:
+        """``warmup_timeout_s`` bounds all warmups together and has no default on purpose: how
+        long startup may take is a deployment decision (``PIPELINE_WARMUP_TIMEOUT_S``), made
+        by whoever composes the pipeline, never a value the pipeline invents.
+        """
         self._redactor = redactor
         self._sentiment = sentiment
         self._summary = summary
         self._intent = intent
+        self._warmup_timeout_s = warmup_timeout_s
         self._verify = verify
         self._threshold_override = threshold_override
         self._version = version
@@ -95,12 +97,12 @@ class Pipeline:
         once. Cancellation only stops waiting: work already handed to ``asyncio.to_thread``
         (model loading, the warmup inference) cannot be interrupted and runs to completion in
         its thread. On any failure the graph stays uncompiled, so ``analyze()`` keeps
-        refusing to run. If the warmups together take longer than
-        ``PIPELINE_WARMUP_TIMEOUT_S``, they are cancelled and ``PipelineError("warmup_timeout")``
-        is raised; threads already running keep running, as above.
+        refusing to run. If the warmups together take longer than ``warmup_timeout_s``, they
+        are cancelled and ``PipelineError("warmup_timeout")`` is raised; threads already
+        running keep running, as above.
         """
         try:
-            async with asyncio.timeout(PIPELINE_WARMUP_TIMEOUT_S):
+            async with asyncio.timeout(self._warmup_timeout_s):
                 async with asyncio.TaskGroup() as warmups:
                     warmups.create_task(self._redactor.warmup())
                     warmups.create_task(self._sentiment.warmup())

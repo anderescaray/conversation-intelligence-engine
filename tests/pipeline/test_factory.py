@@ -57,3 +57,11 @@ def test_the_summary_client_uses_the_given_settings() -> None:
     summary = pipeline._summary  # pyright: ignore[reportPrivateUsage]
     assert isinstance(summary, SummaryOperator)
     assert summary._client.settings is settings  # pyright: ignore[reportPrivateUsage]
+
+
+# Never 300, the setting's default: a factory that ignored the setting would still pass.
+@pytest.mark.parametrize("timeout_s", [0.5, 120.0])
+def test_the_settings_warmup_timeout_reaches_the_pipeline(timeout_s: float) -> None:
+    pipeline = build_pipeline(_settings(pipeline_warmup_timeout_s=timeout_s))
+
+    assert pipeline._warmup_timeout_s == timeout_s  # pyright: ignore[reportPrivateUsage]
