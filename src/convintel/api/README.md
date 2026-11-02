@@ -102,3 +102,30 @@ template; unknown paths share `route="unmatched"`. An exception raised after the
 headers were sent (e.g. inside a streaming body) is counted as `status="500"`, whatever status
 was already sent, and re-raised so the server aborts the response; only the exception type is
 logged by the API.
+
+## Tests
+
+Unit tests (`tests/api/`, fakes for the pipeline, transcriber and fetcher, sockets blocked) run
+with `uv run pytest`.
+
+The end-to-end test, `tests/api/test_production_app_integration.py`, serves
+`create_production_app()` with the real `Settings` through a `TestClient` context manager, so
+the lifespan runs the real telemetry setup and warmups. It posts one synthetic conversation with
+planted fictitious PII to `POST /v1/conversations`, checks the insights, and checks that no
+planted value appears in the response body. It needs:
+
+- the stack up: `docker compose -f infra/docker-compose.yml up -d` (from the main checkout),
+  with MLflow serving `intent-classifier@champion` and Phoenix receiving the spans;
+- the `ml` group: `uv sync --group ml` (it skips without it);
+- `ANTHROPIC_API_KEY` in the environment or `.env` (the summary uses the `Settings` provider
+  and model, `claude-haiku-4-5` by default).
+
+```bash
+uv run pytest -m integration tests/api/test_production_app_integration.py
+```
+
+One run makes one summary call, about $0.002 (it prints the cost from the response).
+
+The lifespan sweeps the default spool, `var/spool/audio` relative to the working directory, and
+deletes files older than 24 h. Never run the test from a checkout whose `var/spool/audio` holds
+real audio (until the spool path is a setting, #27).

@@ -6,6 +6,10 @@ manager, so the lifespan runs the real telemetry setup and the real warmups. Nee
 `ml` group and `ANTHROPIC_API_KEY`; the summary calls the configured provider (Haiku by
 default) once per run, a fraction of a cent. Every name, number and address below is
 fictitious (the same values as `tests/pipeline/test_pipeline_integration.py`).
+
+The lifespan sweeps the default spool (`var/spool/audio`, relative to the working directory)
+and deletes files older than 24 h, as production does: never run this test from a checkout
+whose `var/spool/audio` holds real audio. Known risk until the spool path is a setting (#27).
 """
 
 from collections.abc import Iterator
