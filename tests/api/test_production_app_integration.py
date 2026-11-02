@@ -10,6 +10,12 @@ fictitious (the same values as `tests/pipeline/test_pipeline_integration.py`).
 The lifespan sweeps the default spool (`var/spool/audio`, relative to the working directory)
 and deletes files older than 24 h, as production does: never run this test from a checkout
 whose `var/spool/audio` holds real audio. Known risk until the spool path is a setting (#27).
+
+The lifespan calls the production `telemetry.setup()`, which installs the process-wide tracer
+provider (OTLP to Phoenix); OpenTelemetry allows that only once per process and `setup()` is
+idempotent, so whichever module calls it first owns the provider. Run this file alone or under
+`-m integration`, never in one process with `tests/telemetry/test_setup.py` (e.g. `-m ""`):
+if this test ran first, `test_setup.py` would not see its own spans.
 """
 
 from collections.abc import Iterator

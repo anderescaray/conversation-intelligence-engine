@@ -126,6 +126,13 @@ uv run pytest -m integration tests/api/test_production_app_integration.py
 
 One run makes one summary call, about $0.002 (it prints the cost from the response).
 
+The lifespan runs the production `telemetry.setup()`, which sets the process-wide tracer
+provider (OTLP to Phoenix); OpenTelemetry allows that only once per process, so whichever module
+calls `setup()` first owns it. Run the test alone or with `-m integration`, as above, never in
+one process with `tests/telemetry/test_setup.py` (e.g. `-m ""`), which would then not see its
+own spans. The same constraint applies to `tests/pipeline/test_pipeline_integration.py`, which
+attaches its in-memory exporter to whichever provider is already installed.
+
 The lifespan sweeps the default spool, `var/spool/audio` relative to the working directory, and
 deletes files older than 24 h. Never run the test from a checkout whose `var/spool/audio` holds
 real audio (until the spool path is a setting, #27).
