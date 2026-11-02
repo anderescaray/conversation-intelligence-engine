@@ -58,5 +58,6 @@ def get_fetcher(state: State) -> RecordingFetcher:
 
 
 def get_app_settings(state: State) -> Settings:
-    # Read at request time, not import time, so `uvicorn ...:app` never parses env on import.
+    # Read at request time, never at import time: importing the API parses no env. In
+    # production `create_production_app()` (served with `--factory`) passes its Settings in.
     return state.settings or get_settings()
