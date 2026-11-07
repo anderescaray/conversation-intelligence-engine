@@ -124,6 +124,22 @@ async def test_uses_the_shared_model_by_default(monkeypatch: pytest.MonkeyPatch)
     assert result.model_id == DEFAULT_MODEL_ID
 
 
+async def test_warmup_keeps_the_provisioning_message_of_a_missing_model(
+    monkeypatch: pytest.MonkeyPatch, spans: InMemorySpanExporter
+) -> None:
+    missing = OperatorError("sentiment", "model is missing; provision it with: <command>")
+
+    def fail(model_id: str) -> FakeSentimentModel:
+        raise missing
+
+    monkeypatch.setattr(operator_module, "get_sentiment_model", fail)
+
+    with pytest.raises(OperatorError) as excinfo:
+        await SentimentOperator().warmup()
+
+    assert excinfo.value is missing
+
+
 @pytest.mark.parametrize("error", [OSError("model not found"), LabelMappingError("LABEL_0")])
 async def test_model_failures_become_operator_errors(error: Exception) -> None:
     class Broken(FakeSentimentModel):
