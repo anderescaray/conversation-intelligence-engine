@@ -19,8 +19,10 @@
   or dependency fails startup instead of the first request, the first request does not pay
   for loading or CUDA initialization, and `run()` then uses the model that was checked. Span
   `operator.sentiment.warmup` (`operator.version`, `model.id`; on failure `error.type` only,
-  no exception event). Failures become
-  `OperatorError("sentiment", "warmup failed (<ExceptionType>)")` with no chained cause.
+  no exception event). An `OperatorError` raised while loading (for example the
+  provisioning message of a missing model, see Provisioning) is re-raised unchanged; any
+  other failure becomes `OperatorError("sentiment", "warmup failed (<ExceptionType>)")` with
+  no chained cause.
   Without `warmup()`, the model still loads lazily on the first conversation with customer
   turns.
 - Inference runs in a worker thread under a process-wide lock (transformers pipelines are not
@@ -30,10 +32,11 @@
   imported only when the model loads. The production image must install them (T13).
 - The model is **never downloaded at runtime** (AGENTS.md rule 11). It loads only from the
   local Hugging Face cache, at the revision pinned in `PINNED_MODELS` (see Provisioning).
-- Errors: any failure becomes
+- Errors in `run()`: an `OperatorError` (for example the provisioning message when the
+  model loads lazily) is re-raised unchanged; any other failure becomes
   `OperatorError("sentiment", "sentiment inference failed (<ExceptionType>)")`, with no chained
   cause, so text quoted in third-party messages never reaches spans or logs (same policy as the
-  PII redactor).
+  PII redactor). Our own messages are fixed strings and never carry conversation text.
 - `run()` does not open a span: it annotates the caller's current span (a no-op when there is
   none). The pipeline wraps the call with `traced("operator.sentiment")`, which records latency,
   errors and `operator.version` once. Attributes: `conversation.id`, `model.id`,
