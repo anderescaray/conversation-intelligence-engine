@@ -145,8 +145,15 @@ def load_hf_model(model_id: str) -> HFSentimentModel:
     )
     hub = _import_module("huggingface_hub")
     try:
+        # allow_patterns: a snapshot provisioned with only the pinned files is complete.
+        # Without it, huggingface_hub checks the cache against the whole repo listing.
         snapshot = Path(
-            hub.snapshot_download(model_id, revision=pin.revision, local_files_only=True)
+            hub.snapshot_download(
+                model_id,
+                revision=pin.revision,
+                allow_patterns=list(pin.files),
+                local_files_only=True,
+            )
         )
     except OSError:
         # LocalEntryNotFoundError is an OSError; the fixed message says how to fix it.

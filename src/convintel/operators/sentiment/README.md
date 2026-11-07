@@ -56,8 +56,10 @@ uv run --group ml hf download cardiffnlp/twitter-roberta-base-sentiment-latest c
   `OperatorError("sentiment", "model <id>@<revision> is missing or incomplete in the local
   Hugging Face cache; provision it with: <command>")` and the service does not start. A model
   id without a pinned revision is refused too; `main` is never resolved.
-- The snapshot is resolved with `snapshot_download(..., local_files_only=True)` (a cache
-  lookup) and its *directory* is passed to `transformers.pipeline`. Passing the repo id is not
+- The snapshot is resolved with `snapshot_download(..., allow_patterns=<pinned files>,
+  local_files_only=True)` (a cache lookup; without `allow_patterns`, huggingface_hub checks
+  the cache against the whole repo listing and rejects a snapshot provisioned with only the
+  pinned files) and its *directory* is passed to `transformers.pipeline`. Passing the repo id is not
   enough even with `local_files_only=True`: for `.bin` weights transformers starts a
   safetensors auto-conversion thread that calls the hub.
 

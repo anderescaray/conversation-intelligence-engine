@@ -140,7 +140,14 @@ def test_loads_the_pinned_revision_from_the_cache_by_directory(
     loaded = model.load_hf_model(DEFAULT_MODEL_ID)
 
     assert hub.snapshot_calls == [
-        ((DEFAULT_MODEL_ID,), {"revision": PIN.revision, "local_files_only": True})
+        (
+            (DEFAULT_MODEL_ID,),
+            {
+                "revision": PIN.revision,
+                "allow_patterns": list(PIN.files),
+                "local_files_only": True,
+            },
+        )
     ]
     # A directory, not the repo id: a repo id lets transformers call the hub (auto-conversion).
     assert hub.pipeline_calls == [(("text-classification",), {"model": str(hub.snapshot)})]
