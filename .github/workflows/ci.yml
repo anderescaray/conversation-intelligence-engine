@@ -17,6 +17,9 @@ jobs:
     name: Lint, type-check, unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Later steps reuse the environment that "Install dependencies" built.
+      UV_NO_SYNC: "1"
     steps:
       - uses: actions/checkout@v7
 
@@ -28,7 +31,7 @@ jobs:
 
       # Runners have no GPU: never install the multi-GB 'ml' group (torch). See ADR-0005.
       - name: Install dependencies
-        run: uv sync --locked --no-group ml
+        run: uv sync --frozen --no-group ml
 
       - name: Ruff lint
         run: uv run ruff check .
@@ -42,3 +45,12 @@ jobs:
       # Integration and gpu markers are excluded by addopts in pyproject.toml.
       - name: Unit tests
         run: uv run pytest -q
+
+      # Needs the network: retried so a brief outage on a model download host does not fail CI.
+      - name: Lockfile is up to date
+        run: |
+          for attempt in 1 2 3; do
+            uv lock --check && exit 0
+            sleep 20
+          done
+          exit 1
