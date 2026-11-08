@@ -1,0 +1,13 @@
+{
+  "id": "demo-duplicate-charge",
+  "channel": "chat",
+  "started_at": "2026-11-08T10:00:00Z",
+  "language": "en",
+  "turns": [
+    {"index": 0, "speaker": "customer", "text": "Hi, my name is Laura Gomez. I was charged twice for the same coffee yesterday and I'm really annoyed about it."},
+    {"index": 1, "speaker": "agent", "text": "I'm sorry about that, Laura. Could you confirm the email on your account?"},
+    {"index": 2, "speaker": "customer", "text": "Sure, it's laura.gomez@example.com. Both payments show the same amount and the same shop."},
+    {"index": 3, "speaker": "agent", "text": "Thanks. I can see the duplicate payment and I've refunded it. It should reach your account in three to five working days."},
+    {"index": 4, "speaker": "customer", "text": "Great, thank you so much for sorting that out so quickly!"}
+  ]
+}
