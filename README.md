@@ -14,7 +14,7 @@ This service receives each conversation, transcribes it if it is a call, and str
 
 ## See it running
 
-<!-- VIDEO: paste the GitHub video URL on the next line once the repository is public -->
+https://github.com/user-attachments/assets/2382a14f-6e00-4035-a199-56961475a518
 
 The recording shows a real request through the API, then its trace in Arize Phoenix, where the language model's input contains `<PERSON>` and `<EMAIL_ADDRESS>` instead of the customer's details, then the Grafana dashboard.
 
