@@ -16,6 +16,7 @@ _ENV_VARS = (
     "OPENAI_API_KEY",
     "OLLAMA_BASE_URL",
     "INTENT_VERIFIER_THRESHOLD",
+    "INTENT_VERIFIER_ENABLED",
 )
 
 
@@ -115,6 +116,25 @@ def test_rejects_out_of_range_intent_verifier_threshold(
     # "86" is the realistic mistake: a percentage instead of a probability.
     monkeypatch.setenv("INTENT_VERIFIER_THRESHOLD", raw)
     with pytest.raises(ValidationError, match="intent_verifier_threshold"):
+        _settings()
+
+
+def test_intent_verifier_is_disabled_by_default() -> None:
+    # It stays off until the verifier passes its evaluation gate.
+    assert _settings().intent_verifier_enabled is False
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("true", True), ("1", True), ("false", False)])
+def test_reads_intent_verifier_enabled(
+    monkeypatch: pytest.MonkeyPatch, raw: str, expected: bool
+) -> None:
+    monkeypatch.setenv("INTENT_VERIFIER_ENABLED", raw)
+    assert _settings().intent_verifier_enabled is expected
+
+
+def test_rejects_invalid_intent_verifier_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INTENT_VERIFIER_ENABLED", "maybe")
+    with pytest.raises(ValidationError, match="intent_verifier_enabled"):
         _settings()
 
 
