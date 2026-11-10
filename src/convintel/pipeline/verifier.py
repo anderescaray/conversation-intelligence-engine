@@ -129,6 +129,27 @@ def verified_output(classified: IntentOutput, chosen: str | None) -> tuple[Outco
     return outcome, output
 
 
+def _sum_tokens(classifier: int | None, verifier: int) -> int:
+    return (classifier or 0) + verifier
+
+
+def combined_cost(
+    classifier_cost: float | None, classifier_tokens: int | None, verifier_cost: float | None
+) -> float | None:
+    """The cost of classifying plus verifying, with the pipeline's unknown-cost rule.
+
+    The verified result replaces the classifier's in the intent slot, and ``_total_cost`` only
+    sees that one result, so both calls must be accounted here. As in ``_total_cost``, a part
+    with tokens and no price makes the whole cost unknown (None), never zero; a part with
+    neither (a local model) costs nothing.
+    """
+    if verifier_cost is None:  # the verifier always uses tokens: unpriced means unknown
+        return None
+    if classifier_cost is None:
+        return None if classifier_tokens is not None else verifier_cost
+    return classifier_cost + verifier_cost
+
+
 class LLMIntentVerifier:
     """Verifies a low-confidence intent with one structured LLM call.
 
@@ -219,7 +240,8 @@ class LLMIntentVerifier:
             span.set_attribute("llm.cost_usd", response.cost_usd)
         INTENT_VERIFIER_INVOCATIONS_TOTAL.labels(outcome=outcome).inc()
 
-        # It fills the intent slot: `source` records who decided, the rest is the verifier's call.
+        # It fills the intent slot: `source` records who decided; model and prompt are the
+        # verifier's, latency, tokens and cost cover both calls.
         return OperatorResult[IntentOutput](
             operator=classified.operator,
             operator_version=classified.operator_version,
@@ -227,7 +249,7 @@ class LLMIntentVerifier:
             latency_ms=classified.latency_ms + (time.perf_counter() - start) * 1000,
             model_id=response.model_id,
             prompt_version=prompt.id,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            cost_usd=response.cost_usd,
+            input_tokens=_sum_tokens(classified.input_tokens, response.input_tokens),
+            output_tokens=_sum_tokens(classified.output_tokens, response.output_tokens),
+            cost_usd=combined_cost(classified.cost_usd, classified.input_tokens, response.cost_usd),
         ), []

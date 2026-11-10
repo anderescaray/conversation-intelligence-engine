@@ -32,6 +32,7 @@ from convintel.pipeline.verifier import (
     LLMIntentVerifier,
     VerifierAnswer,
     answer_model,
+    combined_cost,
     label_for,
     render_candidates,
     shuffled_candidates,
@@ -92,12 +93,26 @@ def _settings(**overrides: Any) -> Settings:
     return Settings(_env_file=None, **values)  # pyright: ignore[reportCallIssue]
 
 
-def _classified(top_k: list[tuple[str, float]] = TOP_K) -> OperatorResult[IntentOutput]:
+def _classified(
+    top_k: list[tuple[str, float]] = TOP_K,
+    *,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    cost_usd: float | None = None,
+) -> OperatorResult[IntentOutput]:
+    """The classifier's result; local by default (no tokens, no cost), like the real one."""
     output = IntentOutput(
         label=top_k[0][0], confidence=top_k[0][1], source=CLASSIFIER_SOURCE, top_k=top_k
     )
     return OperatorResult[IntentOutput](
-        operator="intent", operator_version="1.0.0", output=output, latency_ms=40.0, model_id="m"
+        operator="intent",
+        operator_version="1.0.0",
+        output=output,
+        latency_ms=40.0,
+        model_id="m",
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
     )
 
 
@@ -331,6 +346,68 @@ async def test_the_result_fills_the_intent_slot_with_the_verifier_accounting(
     assert attributes["llm.tokens.input"] == 900
     assert attributes["llm.tokens.output"] == 20
     assert attributes["llm.cost_usd"] == pytest.approx(verified.cost_usd)
+
+
+async def test_tokens_and_cost_cover_the_classifier_and_the_verifier() -> None:
+    # The verified result replaces the classifier's, and the pipeline's total only sees it.
+    verifier, _ = await _verifier(
+        tool_answer(
+            answer_model(5),
+            {"reasoning": REASONING, "choice": "A"},
+            input_tokens=100,
+            output_tokens=20,
+        )
+    )
+    classified = _classified(input_tokens=7, output_tokens=3, cost_usd=0.02)
+
+    verified, _ = await _verify(verifier, classified)
+
+    assert verified is not None
+    assert (verified.input_tokens, verified.output_tokens) == (107, 23)
+    assert verified.cost_usd == pytest.approx(0.0202)  # $0.02 + 100/20 tokens at $1/$5 per MTok
+
+
+async def test_a_local_classifier_adds_no_tokens_or_cost() -> None:
+    verifier, _ = await _verifier(_answer("A"))
+
+    verified, _ = await _verify(verifier, _classified())  # no tokens, no cost: a local model
+
+    assert verified is not None
+    assert (verified.input_tokens, verified.output_tokens) == (900, 20)
+    assert verified.cost_usd == pytest.approx(900 / 1e6 * 1 + 20 / 1e6 * 5)
+
+
+@pytest.mark.parametrize(
+    ("classifier_cost", "classifier_tokens", "verifier_cost", "expected"),
+    [
+        (None, None, 0.0002, 0.0002),  # local classifier: costs nothing
+        (0.02, 7, 0.0002, 0.0202),
+        (None, 7, 0.0002, None),  # classifier used tokens with no price: unknown
+        (0.02, 7, None, None),  # unpriced verifier model: unknown
+        (None, None, None, None),
+    ],
+)
+def test_an_unknown_cost_is_never_counted_as_zero(
+    classifier_cost: float | None,
+    classifier_tokens: int | None,
+    verifier_cost: float | None,
+    expected: float | None,
+) -> None:
+    cost = combined_cost(classifier_cost, classifier_tokens, verifier_cost)
+    assert cost == (None if expected is None else pytest.approx(expected))
+
+
+async def test_an_unpriced_verifier_model_leaves_the_cost_unknown() -> None:
+    model = FakeStructuredChatModel(responses=[_answer("A")])
+    client = LLMClient(_settings(llm_model="claude-unpriced"), chat_model=model, sleep=no_sleep)
+    verifier = LLMIntentVerifier(client)
+    await verifier.warmup()
+
+    verified, _ = await _verify(verifier, _classified(input_tokens=7, cost_usd=0.02))
+
+    assert verified is not None
+    assert verified.cost_usd is None  # the pipeline then reports "intent:UnknownCost"
+    assert verified.input_tokens == 907
 
 
 async def test_a_letter_without_a_candidate_gets_one_repair() -> None:

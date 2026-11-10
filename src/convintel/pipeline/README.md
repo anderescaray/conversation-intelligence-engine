@@ -73,8 +73,9 @@ passes its evaluation gate.
 - **Outcomes.** `confirmed` (the classifier's top-1), `overridden` (another candidate, with the
   classifier's calibrated probability for it), `rejected` (`NONE`: label `unknown`,
   confidence 0, `top_k` kept). All three set `source="llm_verifier"`, keep `operator="intent"`,
-  sum the classifier's and the verifier's latency and carry the verifier's model, prompt,
-  tokens and cost. `failed` (a `ConvIntelError`, in practice `LLMError`) keeps the classifier's
+  carry the verifier's model and prompt, and sum the classifier's and the verifier's latency,
+  tokens and cost; as in `total_cost_usd`, an unpriced LLM call makes the cost unknown (None),
+  never zero. `failed` (a `ConvIntelError`, in practice `LLMError`) keeps the classifier's
   result and adds `"intent_verifier:LLMError"` to `errors`; any other exception propagates.
 
 ## Telemetry
