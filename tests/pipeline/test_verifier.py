@@ -368,9 +368,15 @@ async def test_a_bug_propagates() -> None:
         await _verify(verifier)
 
 
-async def test_the_reasoning_never_leaves_the_verifier(
+async def test_our_code_never_emits_the_reasoning(
     spans: InMemorySpanExporter, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Our spans, logs, errors and insights never carry `reasoning`.
+
+    This does not cover OpenInference's LangChain auto-instrumentation (not installed here),
+    which records LLM inputs and outputs, `reasoning` and the repair message included, until
+    OPENINFERENCE_HIDE_* is enabled in production (T13).
+    """
     caplog.set_level(logging.DEBUG)
     # A failed then a successful verification: the repair path logs, the failure path errors.
     failing, _ = await _verifier(_answer("E"), _answer("E"))

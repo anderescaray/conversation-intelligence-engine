@@ -67,8 +67,9 @@ passes its evaluation gate.
   with agent and bot turns as context only.
 - **Answer.** `answer_model(n)`: `reasoning` (one or two sentences) first, then `choice`, one
   of the first `n` letters or `NONE`. A letter with no candidate fails validation, gets the
-  client's single repair, then `LLMError`. `reasoning` is dropped on parse: never in spans,
-  logs, errors or the insights.
+  client's single repair, then `LLMError`. Our code drops `reasoning` on parse and never emits
+  it (not on our spans, logs, errors or the insights); see [Telemetry](#telemetry) for what
+  OpenInference records.
 - **Outcomes.** `confirmed` (the classifier's top-1), `overridden` (another candidate, with the
   classifier's calibrated probability for it), `rejected` (`NONE`: label `unknown`,
   confidence 0, `top_k` kept). All three set `source="llm_verifier"`, keep `operator="intent"`,
@@ -84,8 +85,17 @@ operator from `traced()`, and `operator.<name>.warmup` spans at startup. The ver
 `operator.intent_verifier` (its `operator.version` is `placeholder` while disabled) with
 `verifier.outcome`, `verifier.candidates`, `prompt.version`, `model.id`, `llm.tokens.*` and
 `llm.cost_usd`, and increments
-`convintel_intent_verifier_invocations_total{outcome=confirmed|overridden|rejected|failed}`. `convintel_pipeline_latency_seconds{channel}` is observed once per
-conversation, failures included. No text or PII in spans, logs or errors.
+`convintel_intent_verifier_invocations_total{outcome=confirmed|overridden|rejected|failed}`.
+`convintel_pipeline_latency_seconds{channel}` is observed once per conversation, failures
+included.
+
+Our code puts no conversation text, `reasoning` or PII in spans, logs or errors. OpenInference's
+LangChain auto-instrumentation (`telemetry.setup()`) does record every LLM call's inputs and
+outputs on its own spans: for the summary and the verifier that is the redacted conversation,
+the model's answer (the verifier's `reasoning` included) and, on a repair, the client's repair
+message, which quotes the previous answer. This is a known exposure of redacted text only (PII
+never reaches the graph) until `OPENINFERENCE_HIDE_*` is enabled in production, the planned T13
+follow-up.
 
 ## Tests
 

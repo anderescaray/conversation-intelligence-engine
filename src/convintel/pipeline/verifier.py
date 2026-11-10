@@ -13,8 +13,12 @@ Outcomes (``convintel_intent_verifier_invocations_total{outcome}``):
 - ``rejected``: none of them fits, so the intent becomes ``unknown`` with confidence 0;
 - ``failed``: an expected LLM failure; the graph keeps the classifier's result.
 
-The model's ``reasoning`` exists only to make it think before choosing. It is dropped as soon as
-the answer is parsed: never in spans, logs, errors or the insights.
+The model's ``reasoning`` exists only to make it think before choosing. Our code drops it as soon
+as the answer is parsed and never emits it: not on our spans, logs, errors or the insights.
+OpenInference's LangChain auto-instrumentation is another matter: it records the LLM call's inputs
+and outputs on its own spans, including the redacted conversation, ``reasoning`` and, on a repair,
+the client's repair message that quotes the previous answer. That is the same known exposure as the
+summary call (redacted text only) until ``OPENINFERENCE_HIDE_*`` is enabled in production (T13).
 """
 
 import hashlib
@@ -197,7 +201,7 @@ class LLMIntentVerifier:
                 conversation=wrap_conversation(conversation.text),
             )
         except ConvIntelError as exc:
-            # The type only: the message is not needed, and `reasoning` never leaves this call.
+            # The type only: our code never puts the message or `reasoning` in errors or spans.
             error_type = type(exc).__name__
             span.set_attribute("verifier.outcome", "failed")
             span.set_attribute("error.type", error_type)
@@ -205,7 +209,7 @@ class LLMIntentVerifier:
             INTENT_VERIFIER_INVOCATIONS_TOTAL.labels(outcome="failed").inc()
             return None, [f"{self.name}:{error_type}"]
 
-        # Only the letter survives; the reasoning is dropped here.
+        # Only the letter survives; our code drops the reasoning here.
         chosen = label_for(response.output.choice, labels)
         outcome, output = verified_output(classified.output, chosen)
         span.set_attribute("verifier.outcome", outcome)
