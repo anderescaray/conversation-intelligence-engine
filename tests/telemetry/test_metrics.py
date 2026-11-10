@@ -26,7 +26,7 @@ _EXPECTED: dict[str, tuple[object, dict[str, str], str]] = {
     ),
     "convintel_intent_verifier_invocations_total": (
         metrics.INTENT_VERIFIER_INVOCATIONS_TOTAL,
-        {"outcome": "agreed"},
+        {"outcome": "confirmed"},
         "",
     ),
     "convintel_asr_realtime_factor": (
