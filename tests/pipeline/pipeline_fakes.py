@@ -170,12 +170,20 @@ class FakeRedactor(FakeWarmup):
         return as_result(self.name, PIIOutput(entities=[entity], redacted_conversation=redacted))
 
 
-class FakeVerifier:
+class FakeVerifier(FakeWarmup):
     """Records how often it is called; returns a fixed verification result."""
 
+    version = FAKE_VERSION
+
     def __init__(
-        self, result: OperatorResult[IntentOutput] | None = None, errors: list[str] | None = None
+        self,
+        result: OperatorResult[IntentOutput] | None = None,
+        errors: list[str] | None = None,
+        *,
+        warmup_error: ConvIntelError | None = None,
+        warmup_hook: WarmupHook | None = None,
     ) -> None:
+        super().__init__(error=warmup_error, hook=warmup_hook)
         self._result = result
         self._errors = errors or []
         self.calls = 0

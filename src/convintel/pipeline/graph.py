@@ -6,8 +6,7 @@ classifier's top-k. The graph ends when every branch has ended, so there is no
 aggregate node: ``Pipeline.analyze()`` builds the insights from the final state.
 """
 
-from collections.abc import Awaitable, Callable
-from typing import Literal
+from typing import Literal, Protocol
 
 from langgraph.graph import END, START, StateGraph
 
@@ -20,17 +19,30 @@ from convintel.contracts.schemas import (
     SummaryOutput,
 )
 from convintel.operators.intent.operator import UNKNOWN_LABEL
+from convintel.telemetry import traced
 
 from .nodes import run_operator
 from .state import PipelineState, PipelineUpdate
 
-type VerifyFn = Callable[
-    [Conversation, OperatorResult[IntentOutput]],
-    Awaitable[tuple[OperatorResult[IntentOutput] | None, list[str]]],
-]
-"""Second opinion on a low-confidence intent: the verified result (None if it
-failed) and the errors to record. A failed verification keeps the classifier's
-result."""
+
+class IntentVerifier(Protocol):
+    """Second opinion on a low-confidence intent.
+
+    A call returns the verified result (None if verification failed) and the errors to record;
+    a failed verification keeps the classifier's result. The pipeline warms the verifier at
+    startup with the operators, and the graph traces every call as ``operator.intent_verifier``,
+    whichever implementation is plugged in.
+    """
+
+    @property
+    def version(self) -> str: ...
+
+    async def warmup(self) -> None: ...
+
+    async def __call__(
+        self, conversation: Conversation, classified: OperatorResult[IntentOutput]
+    ) -> tuple[OperatorResult[IntentOutput] | None, list[str]]: ...
+
 
 type Route = Literal["verify", "end"]
 
@@ -55,7 +67,7 @@ def build_graph(
     sentiment: Operator[SentimentOutput],
     summary: Operator[SummaryOutput],
     intent: Operator[IntentOutput],
-    verify: VerifyFn,
+    verify: IntentVerifier,
     threshold: float,
 ):
     """Compile the graph. Operators, verifier and τ are injected, so tests use fakes
@@ -77,7 +89,9 @@ def build_graph(
         classified = state["intent"]
         if classified is None:  # unreachable: the router only sends a classifier result
             raise RuntimeError("verifier reached without a classifier result")
-        verified, errors = await verify(state["redacted_conversation"], classified)
+        # Same span name and metrics as the operators; the verifier only annotates the span.
+        with traced("operator.intent_verifier", version=verify.version):
+            verified, errors = await verify(state["redacted_conversation"], classified)
         if verified is None:
             return {"errors": errors}  # verification failed: keep the classifier's label
         return {"intent": verified, "errors": errors}
