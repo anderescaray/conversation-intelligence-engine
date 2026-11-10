@@ -8,6 +8,7 @@ from convintel.config import Settings, get_settings
 from convintel.llm import client as client_module
 from convintel.operators.intent import IntentOperator
 from convintel.operators.intent import operator as intent_module
+from convintel.operators.intent.operator import DEFAULT_TOP_K
 from convintel.operators.llm import SummaryOperator
 from convintel.operators.pii import redactor as redactor_module
 from convintel.operators.sentiment import operator as sentiment_module
@@ -87,8 +88,17 @@ def test_the_llm_verifier_is_plugged_in_when_enabled() -> None:
     assert verifier._client is summary._client  # pyright: ignore[reportPrivateUsage]
 
 
-def test_the_classifier_hands_five_candidates_to_the_verifier() -> None:
+def test_the_classifier_hands_five_candidates_to_an_enabled_verifier() -> None:
+    pipeline = build_pipeline(_settings(intent_verifier_enabled=True))
+
+    intent = pipeline._intent  # pyright: ignore[reportPrivateUsage]
+    assert isinstance(intent, IntentOperator)
+    assert intent._top_k == 5  # pyright: ignore[reportPrivateUsage]
+
+
+def test_with_the_verifier_off_the_classifier_keeps_its_default_top_k() -> None:
+    # Flag off must leave the intent output as it was before the verifier: same top_k length.
     intent = build_pipeline(_settings())._intent  # pyright: ignore[reportPrivateUsage]
 
     assert isinstance(intent, IntentOperator)
-    assert intent._top_k == 5  # pyright: ignore[reportPrivateUsage]
+    assert intent._top_k == DEFAULT_TOP_K == 3  # pyright: ignore[reportPrivateUsage]

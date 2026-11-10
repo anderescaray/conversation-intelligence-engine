@@ -55,10 +55,12 @@ A second opinion on a low-confidence intent, in `verifier.py`. `build_pipeline` 
 `KeepClassifierLabel`, which keeps the classifier's label. The flag stays off until the verifier
 passes its evaluation gate.
 
-- **Candidates.** The classifier's top-5 (`IntentOperator(top_k=5)`, see
-  `training/intent/reports/verifier-candidates.md`), shown to the LLM as letters with their
-  taxonomy-v3 descriptions (`intent_descriptions(3)`), never the label names, the
-  probabilities or which candidate the classifier preferred. Their order is shuffled with a
+- **Candidates.** The classifier's top-5 (see `training/intent/reports/verifier-candidates.md`).
+  `build_pipeline` builds `IntentOperator(top_k=5)` only when the verifier is enabled; with the
+  flag off the classifier keeps its default `top_k`, so the output is unchanged. Candidates
+  are shown to the LLM as letters with their taxonomy-v3 descriptions
+  (`intent_descriptions(3)`), never the label names, the probabilities or which candidate the
+  classifier preferred. Their order is shuffled with a
   seed from `sha256(conversation.id)`: the same conversation always gets the same prompt, and
   the classifier's top-1 lands on each letter about equally often. Fewer candidates show
   fewer letters.
