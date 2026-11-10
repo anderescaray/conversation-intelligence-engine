@@ -3,6 +3,7 @@ import re
 import traceback
 
 import pytest
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pipeline_fakes import (
     TAU,
     FakeIntentClassifier,
@@ -217,6 +218,26 @@ async def test_an_override_of_zero_means_never_verify() -> None:
     parts = _Parts(confidence=0.1)
     await (await parts.ready(threshold_override=0.0)).analyze(make_conversation())
     assert parts.verifier.calls == 0
+
+
+def _root_attributes(spans: InMemorySpanExporter) -> dict[str, object]:
+    (root,) = [s for s in spans.get_finished_spans() if s.name == "pipeline.analyze"]
+    return dict(root.attributes or {})
+
+
+@pytest.mark.parametrize(
+    ("override", "expected"),
+    [(None, TAU), (0.5, 0.5), (0.0, 0.0)],  # the bundle's τ, an override, "never verify"
+)
+async def test_the_effective_threshold_is_recorded_on_the_root_span(
+    spans: InMemorySpanExporter, override: float | None, expected: float
+) -> None:
+    pipeline = await _Parts().ready(threshold_override=override)
+    await pipeline.analyze(make_conversation(conversation_id="c-tau"))
+
+    attributes = _root_attributes(spans)
+    assert attributes["intent.threshold"] == expected
+    assert attributes["conversation.id"] == "c-tau"
 
 
 async def test_warmup_fails_without_any_threshold() -> None:

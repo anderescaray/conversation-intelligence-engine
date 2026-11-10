@@ -86,6 +86,7 @@ class Pipeline:
         self._threshold_override = threshold_override
         self._version = version
         self._graph: Any = None  # compiled in warmup(), once τ is known
+        self._threshold = 0.0  # the effective τ, resolved in warmup() with the graph
 
     async def warmup(self) -> None:
         """Warm every operator, resolve τ and compile the graph. Raising aborts startup.
@@ -120,6 +121,7 @@ class Pipeline:
         )
         if threshold is None:
             raise PipelineError("intent_threshold")
+        self._threshold = threshold
         self._graph = build_graph(
             sentiment=self._sentiment,
             summary=self._summary,
@@ -139,6 +141,8 @@ class Pipeline:
             ) as root:
                 root.set_attribute("conversation.id", conversation.id)
                 root.set_attribute("pipeline.version", self._version)
+                # Which τ routed this conversation: the settings override or the bundle's.
+                root.set_attribute("intent.threshold", self._threshold)
                 try:
                     return await self._analyze(conversation, root, start)
                 except Exception as exc:
