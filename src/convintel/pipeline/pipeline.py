@@ -30,7 +30,7 @@ from convintel.errors import ConvIntelError, PipelineError
 from convintel.telemetry import traced
 from convintel.telemetry.metrics import PIPELINE_LATENCY_SECONDS
 
-from .graph import VerifyFn, build_graph
+from .graph import IntentVerifier, build_graph
 from .state import PipelineState
 
 _tracer = trace.get_tracer(__name__)
@@ -53,11 +53,23 @@ class IntentClassifier(WarmableOperator[IntentOutput], Protocol):
     def threshold(self) -> float | None: ...
 
 
-async def keep_classifier_label(
-    conversation: Conversation, classified: OperatorResult[IntentOutput]
-) -> tuple[OperatorResult[IntentOutput] | None, list[str]]:
-    """Verifier placeholder until the LLM verifier exists: keeps the classifier's label."""
-    return None, []
+class KeepClassifierLabel:
+    """The verifier while ``INTENT_VERIFIER_ENABLED`` is off: keeps the classifier's label.
+
+    It implements ``IntentVerifier`` like the LLM verifier, so the pipeline warms and traces one
+    type either way; its ``operator.intent_verifier`` spans and latency carry the version
+    ``"placeholder"``, apart from the real verifier's.
+    """
+
+    version = "placeholder"
+
+    async def warmup(self) -> None:
+        """Nothing to load."""
+
+    async def __call__(
+        self, conversation: Conversation, classified: OperatorResult[IntentOutput]
+    ) -> tuple[OperatorResult[IntentOutput] | None, list[str]]:
+        return None, []
 
 
 class Pipeline:
@@ -69,7 +81,7 @@ class Pipeline:
         summary: WarmableOperator[SummaryOutput],
         intent: IntentClassifier,
         warmup_timeout_s: float,
-        verify: VerifyFn = keep_classifier_label,
+        verify: IntentVerifier | None = None,
         threshold_override: float | None = None,
         version: str = convintel.__version__,
     ) -> None:
@@ -82,14 +94,15 @@ class Pipeline:
         self._summary = summary
         self._intent = intent
         self._warmup_timeout_s = warmup_timeout_s
-        self._verify = verify
+        self._verify: IntentVerifier = verify if verify is not None else KeepClassifierLabel()
         self._threshold_override = threshold_override
         self._version = version
         self._graph: Any = None  # compiled in warmup(), once τ is known
         self._threshold = 0.0  # the effective τ, resolved in warmup() with the graph
 
     async def warmup(self) -> None:
-        """Warm every operator, resolve τ and compile the graph. Raising aborts startup.
+        """Warm every operator and the verifier, resolve τ and compile the graph. Raising aborts
+        startup.
 
         The warmups run concurrently: they load independent models (or only check config),
         so startup takes the slowest one instead of their sum. They run in a TaskGroup: the
@@ -109,6 +122,7 @@ class Pipeline:
                     warmups.create_task(self._sentiment.warmup())
                     warmups.create_task(self._summary.warmup())
                     warmups.create_task(self._intent.warmup())
+                    warmups.create_task(self._verify.warmup())
         except TimeoutError:
             # Only our deadline gets here bare: a warmup's own TimeoutError arrives wrapped in
             # the TaskGroup's ExceptionGroup.

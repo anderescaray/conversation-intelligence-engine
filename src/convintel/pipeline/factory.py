@@ -12,16 +12,30 @@ from convintel.operators.llm import SummaryOperator
 from convintel.operators.pii import PIIRedactor
 from convintel.operators.sentiment import SentimentOperator
 
-from .pipeline import Pipeline
+from .pipeline import KeepClassifierLabel, Pipeline
+from .verifier import LLMIntentVerifier
+
+INTENT_TOP_K = 5
+"""Candidates the classifier hands to the verifier; see
+training/intent/reports/verifier-candidates.md."""
 
 
 def build_pipeline(settings: Settings) -> Pipeline:
-    """The pipeline with the real operators. Call ``warmup()`` before ``analyze()``."""
+    """The pipeline with the real operators. Call ``warmup()`` before ``analyze()``.
+
+    The LLM verifier is plugged in only with ``INTENT_VERIFIER_ENABLED``; until it passes its
+    evaluation gate the classifier's label is kept, as before.
+    """
+    client = LLMClient(settings)
+    verify = (
+        LLMIntentVerifier(client) if settings.intent_verifier_enabled else KeepClassifierLabel()
+    )
     return Pipeline(
         redactor=PIIRedactor(),
         sentiment=SentimentOperator(),
-        summary=SummaryOperator(client=LLMClient(settings)),
-        intent=IntentOperator(),
+        summary=SummaryOperator(client=client),
+        intent=IntentOperator(top_k=INTENT_TOP_K),
         warmup_timeout_s=settings.pipeline_warmup_timeout_s,
+        verify=verify,
         threshold_override=settings.intent_verifier_threshold,
     )

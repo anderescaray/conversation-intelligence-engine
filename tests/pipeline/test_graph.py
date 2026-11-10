@@ -2,7 +2,15 @@ import asyncio
 import math
 
 import pytest
-from pipeline_fakes import FakeOperator, FakeVerifier, as_result, intent_output, make_conversation
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from pipeline_fakes import (
+    FAKE_VERSION,
+    FakeOperator,
+    FakeVerifier,
+    as_result,
+    intent_output,
+    make_conversation,
+)
 from pydantic import BaseModel
 
 from convintel.contracts import Conversation
@@ -83,6 +91,19 @@ async def test_low_confidence_intent_is_replaced_by_the_verifier() -> None:
     intent = final["intent"]
     assert intent is not None
     assert intent.output.label == "card_delivery_estimate"
+
+
+async def test_the_verifier_runs_in_its_own_traced_span(spans: InMemorySpanExporter) -> None:
+    await _graph(confidence=0.5, verifier=FakeVerifier()).ainvoke(_state())
+
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.intent_verifier"]
+    assert dict(span.attributes or {})["operator.version"] == FAKE_VERSION
+
+
+async def test_a_confident_intent_opens_no_verifier_span(spans: InMemorySpanExporter) -> None:
+    await _graph(confidence=0.99, verifier=FakeVerifier()).ainvoke(_state())
+
+    assert "operator.intent_verifier" not in {s.name for s in spans.get_finished_spans()}
 
 
 async def test_failed_verification_keeps_the_classifier_label() -> None:
