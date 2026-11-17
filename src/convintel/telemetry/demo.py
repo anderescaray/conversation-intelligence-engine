@@ -60,7 +60,7 @@ def _emit_one(tracer: trace.Tracer) -> None:
 
         if random.random() < 0.4:
             INTENT_VERIFIER_INVOCATIONS_TOTAL.labels(
-                outcome=random.choice(["agreed", "overrode"])
+                outcome=random.choice(["confirmed", "overridden", "rejected", "failed"])
             ).inc()
 
         # the synthetic failure is already on the span and in convintel_operator_errors_total

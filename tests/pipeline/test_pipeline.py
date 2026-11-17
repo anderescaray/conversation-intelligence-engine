@@ -1,9 +1,12 @@
 import asyncio
 import re
 import traceback
+from typing import Any
 
 import pytest
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pipeline_fakes import (
+    REDACTED_TEXT,
     TAU,
     FakeIntentClassifier,
     FakeOperator,
@@ -14,12 +17,18 @@ from pipeline_fakes import (
     make_conversation,
 )
 from prometheus_client import REGISTRY
+from pydantic import SecretStr
 
 import convintel
+from convintel.config import Settings
 from convintel.contracts import Channel
-from convintel.contracts.schemas import SentimentOutput, SummaryOutput
+from convintel.contracts.schemas import IntentOutput, SentimentOutput, SummaryOutput
 from convintel.errors import OperatorError, PipelineError
-from convintel.pipeline.pipeline import Pipeline
+from convintel.llm import LLMClient
+from convintel.llm.testing import FakeStructuredChatModel, no_sleep, tool_answer
+from convintel.pipeline.graph import IntentVerifier
+from convintel.pipeline.pipeline import KeepClassifierLabel, Pipeline
+from convintel.pipeline.verifier import LLMIntentVerifier, answer_model
 
 SECRET = "marisol.q@example.com"
 # The pipeline does not look inside these outputs, so unvalidated placeholders are enough.
@@ -78,7 +87,9 @@ class _Parts:
             warmup_error=warmup_error("intent"),
             warmup_hook=hook("intent"),
         )
-        self.verifier = FakeVerifier()
+        self.verifier = FakeVerifier(
+            warmup_error=warmup_error("intent_verifier"), warmup_hook=hook("intent_verifier")
+        )
 
     def pipeline(self, *, threshold_override: float | None = None) -> Pipeline:
         return Pipeline(
@@ -219,6 +230,26 @@ async def test_an_override_of_zero_means_never_verify() -> None:
     assert parts.verifier.calls == 0
 
 
+def _root_attributes(spans: InMemorySpanExporter) -> dict[str, object]:
+    (root,) = [s for s in spans.get_finished_spans() if s.name == "pipeline.analyze"]
+    return dict(root.attributes or {})
+
+
+@pytest.mark.parametrize(
+    ("override", "expected"),
+    [(None, TAU), (0.5, 0.5), (0.0, 0.0)],  # the bundle's τ, an override, "never verify"
+)
+async def test_the_effective_threshold_is_recorded_on_the_root_span(
+    spans: InMemorySpanExporter, override: float | None, expected: float
+) -> None:
+    pipeline = await _Parts().ready(threshold_override=override)
+    await pipeline.analyze(make_conversation(conversation_id="c-tau"))
+
+    attributes = _root_attributes(spans)
+    assert attributes["intent.threshold"] == expected
+    assert attributes["conversation.id"] == "c-tau"
+
+
 async def test_warmup_fails_without_any_threshold() -> None:
     with pytest.raises(PipelineError):
         await _Parts(bundle_threshold=None).ready()
@@ -229,18 +260,18 @@ async def test_analyze_before_warmup_is_a_bug() -> None:
         await _Parts().pipeline().analyze(make_conversation())
 
 
-async def test_warmup_warms_every_operator_once() -> None:
+async def test_warmup_warms_every_operator_and_the_verifier_once() -> None:
     parts = _Parts()
     await parts.ready()
-    operators = (parts.redactor, parts.sentiment, parts.summary, parts.intent)
-    assert [o.warmups for o in operators] == [1, 1, 1, 1]
+    warmed = (parts.redactor, parts.sentiment, parts.summary, parts.intent, parts.verifier)
+    assert [w.warmups for w in warmed] == [1, 1, 1, 1, 1]
 
 
 def _operator_error(operator: str) -> pytest.RaisesExc[OperatorError]:
     return pytest.RaisesExc(OperatorError, check=lambda exc: exc.operator == operator)
 
 
-@pytest.mark.parametrize("failing", ["pii", "sentiment", "summary", "intent"])
+@pytest.mark.parametrize("failing", ["pii", "sentiment", "summary", "intent", "intent_verifier"])
 async def test_a_failing_warmup_aborts_startup_and_the_graph_is_not_compiled(
     failing: str,
 ) -> None:
@@ -264,9 +295,9 @@ async def test_every_failed_warmup_is_reported_together() -> None:
 
 
 async def test_warmups_run_concurrently() -> None:
-    # Each warmup waits until all four have started: run one after another, the first
-    # would wait forever, so only a concurrent warmup gets past the barrier.
-    barrier = asyncio.Barrier(4)
+    # Each warmup (four operators and the verifier) waits until all five have started: run one
+    # after another, the first would wait forever, so only a concurrent warmup gets past.
+    barrier = asyncio.Barrier(5)
 
     async def wait_for_the_others() -> None:
         await barrier.wait()
@@ -287,3 +318,75 @@ async def test_a_warmup_that_never_finishes_times_out() -> None:
     assert excinfo.value.__suppress_context__
     with pytest.raises(RuntimeError, match="before warmup"):
         await pipeline.analyze(make_conversation())
+
+
+# --- verifier -------------------------------------------------------------------------------
+
+
+async def test_without_a_verifier_the_classifier_label_is_kept(
+    spans: InMemorySpanExporter,
+) -> None:
+    parts = _Parts(confidence=0.7)  # below τ: routed to the verifier
+    pipeline = Pipeline(
+        redactor=parts.redactor,
+        sentiment=parts.sentiment,
+        summary=parts.summary,
+        intent=parts.intent,
+        warmup_timeout_s=parts.warmup_timeout_s,
+    )
+    await pipeline.warmup()
+
+    insights = await pipeline.analyze(make_conversation())
+
+    assert insights.intent is not None
+    assert insights.intent.output.label == "card_arrival"
+    assert insights.intent.output.source == "classifier"
+    assert insights.errors == []
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.intent_verifier"]
+    assert dict(span.attributes or {})["operator.version"] == "placeholder"
+
+
+def test_keep_classifier_label_is_an_intent_verifier() -> None:
+    verifier: IntentVerifier = KeepClassifierLabel()  # pyright checks the protocol here
+    assert verifier.version == "placeholder"
+
+
+async def test_the_llm_verifier_result_reaches_the_insights() -> None:
+    # The real verifier and client with a scripted model: no network, no paid call.
+    top_k = [("card_arrival", 0.6), ("card_delivery_estimate", 0.3)]
+    parts = _Parts()
+    parts.intent = FakeIntentClassifier(
+        IntentOutput(label="card_arrival", confidence=0.6, source="classifier", top_k=top_k)
+    )
+    model = FakeStructuredChatModel(
+        responses=[tool_answer(answer_model(2), {"reasoning": "SENTINEL-WHY", "choice": "NONE"})]
+    )
+    llm: dict[str, Any] = {
+        "llm_provider": "anthropic",
+        "llm_model": "claude-haiku-4-5",
+        "anthropic_api_key": SecretStr("test-key"),
+    }
+    settings = Settings(_env_file=None, **llm)  # pyright: ignore[reportCallIssue]
+    pipeline = Pipeline(
+        redactor=parts.redactor,
+        sentiment=parts.sentiment,
+        summary=parts.summary,
+        intent=parts.intent,
+        warmup_timeout_s=parts.warmup_timeout_s,
+        verify=LLMIntentVerifier(LLMClient(settings, chat_model=model, sleep=no_sleep)),
+    )
+    await pipeline.warmup()
+
+    insights = await pipeline.analyze(make_conversation(f"mail {SECRET}"))
+
+    assert insights.intent is not None
+    assert insights.intent.output.label == "unknown"
+    assert insights.intent.output.source == "llm_verifier"
+    assert insights.total_cost_usd == pytest.approx(insights.intent.cost_usd)
+    assert insights.total_cost_usd > 0
+    assert insights.errors == []
+    # Only the redacted conversation reaches the LLM, and the reasoning never comes back.
+    (messages,) = model.calls
+    assert SECRET not in str(messages)
+    assert REDACTED_TEXT in str(messages[-1].content)
+    assert "SENTINEL-WHY" not in insights.model_dump_json()

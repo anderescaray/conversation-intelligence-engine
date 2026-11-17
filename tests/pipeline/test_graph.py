@@ -1,8 +1,19 @@
+import asyncio
 import math
 
 import pytest
-from pipeline_fakes import FakeOperator, FakeVerifier, as_result, intent_output, make_conversation
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from pipeline_fakes import (
+    FAKE_VERSION,
+    FakeOperator,
+    FakeVerifier,
+    as_result,
+    intent_output,
+    make_conversation,
+)
+from pydantic import BaseModel
 
+from convintel.contracts import Conversation
 from convintel.contracts.schemas import IntentOutput, OperatorResult, SentimentOutput, SummaryOutput
 from convintel.errors import OperatorError
 from convintel.operators.intent.operator import UNKNOWN_LABEL
@@ -82,6 +93,19 @@ async def test_low_confidence_intent_is_replaced_by_the_verifier() -> None:
     assert intent.output.label == "card_delivery_estimate"
 
 
+async def test_the_verifier_runs_in_its_own_traced_span(spans: InMemorySpanExporter) -> None:
+    await _graph(confidence=0.5, verifier=FakeVerifier()).ainvoke(_state())
+
+    (span,) = [s for s in spans.get_finished_spans() if s.name == "operator.intent_verifier"]
+    assert dict(span.attributes or {})["operator.version"] == FAKE_VERSION
+
+
+async def test_a_confident_intent_opens_no_verifier_span(spans: InMemorySpanExporter) -> None:
+    await _graph(confidence=0.99, verifier=FakeVerifier()).ainvoke(_state())
+
+    assert "operator.intent_verifier" not in {s.name for s in spans.get_finished_spans()}
+
+
 async def test_failed_verification_keeps_the_classifier_label() -> None:
     verifier = FakeVerifier(None, errors=["intent_verifier:LLMError"])
     final = await _graph(confidence=0.5, verifier=verifier).ainvoke(_state())
@@ -102,3 +126,41 @@ async def test_a_failed_operator_fails_open_without_stopping_the_others() -> Non
     assert final["summary"] is not None
     assert final["intent"] is not None
     assert final["errors"] == ["sentiment:OperatorError"]
+
+
+class _WaitsForTheOthers[T: BaseModel]:
+    """Operator that only returns once every graph operator has started its run."""
+
+    version = "0.0.0-test"
+
+    def __init__(self, name: str, output: T, barrier: asyncio.Barrier) -> None:
+        self.name = name
+        self._output = output
+        self._barrier = barrier
+
+    async def run(self, conversation: Conversation) -> OperatorResult[T]:
+        # Bounded on its own: chained branches raise TimeoutError (not a ConvIntelError, so it
+        # propagates out of the graph) instead of hanging the test run.
+        await asyncio.wait_for(self._barrier.wait(), timeout=2)
+        return as_result(self.name, self._output)
+
+
+async def test_sentiment_summary_and_intent_run_in_parallel() -> None:
+    # Run one after another, the first operator would wait at the barrier alone and time out:
+    # only branches that run concurrently all get past it. A chained graph would turn the
+    # critical path from max(...) into a sum.
+    barrier = asyncio.Barrier(3)
+    graph = build_graph(
+        sentiment=_WaitsForTheOthers("sentiment", SENTIMENT, barrier),
+        summary=_WaitsForTheOthers("summary", SUMMARY, barrier),
+        intent=_WaitsForTheOthers("intent", intent_output(confidence=0.99), barrier),
+        verify=FakeVerifier(),
+        threshold=TAU,
+    )
+
+    final = await graph.ainvoke(_state())
+
+    assert final["sentiment"] is not None
+    assert final["summary"] is not None
+    assert final["intent"] is not None
+    assert final["errors"] == []

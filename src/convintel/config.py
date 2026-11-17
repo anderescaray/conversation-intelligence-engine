@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     # Pipeline policy
     intent_verifier_threshold: float | None = Field(default=None, ge=0, le=1)
+    # Off until the verifier passes its evaluation gate: while off, the classifier's label is
+    # kept even below the threshold.
+    intent_verifier_enabled: bool = False
 
     # Upper bound for all model warmups together at startup. A hung load must fail the
     # deploy instead of leaving the service up but never ready. Keep it below the platform's

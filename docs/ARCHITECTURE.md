@@ -87,7 +87,7 @@ The three operators run **in parallel** (LangGraph fan-out) and join at `Aggrega
 | `convintel_llm_tokens_total` | counter | `model`, `direction` (in/out) |
 | `convintel_llm_cost_usd_total` | counter | `model`, `operator` |
 | `convintel_operator_errors_total` | counter | `operator`, `error_type` |
-| `convintel_intent_verifier_invocations_total` | counter | `outcome` (agreed/overrode) |
+| `convintel_intent_verifier_invocations_total` | counter | `outcome` (confirmed/overridden/rejected/failed) |
 | `convintel_asr_realtime_factor` | histogram | `model` |
 
 ## SLOs (initial targets, revisited after load tests)

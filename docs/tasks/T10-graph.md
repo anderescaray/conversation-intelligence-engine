@@ -83,6 +83,12 @@ Contracts are frozen.
   production path: Anthropic `claude-haiku-4-5` (the `Settings` defaults), not Ollama.
 - ruff, ruff format --check, pyright, pytest, uv lock --check.
 
+### Status (verifier PR, closes #41)
+- [x] Effective τ recorded on a span (decision 3): `intent.threshold` on `pipeline.analyze`,
+  `test_the_effective_threshold_is_recorded_on_the_root_span`.
+- [x] Operators run in parallel inside the graph: `asyncio.Barrier(3)` that sentiment, summary
+  and intent must all reach, `test_sentiment_summary_and_intent_run_in_parallel`.
+
 ## Out of scope
 - The LLM intent verifier. It will be its own PR: its candidates are the classifier's top-5;
   "none of these" -> `unknown` with `outcome="rejected"`; it is enabled only after an
